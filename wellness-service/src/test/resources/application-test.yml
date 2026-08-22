@@ -1,0 +1,14 @@
+jwt:
+  secret: LocalDevOnlyChangeMe_NeedAtLeast32Bytes!!
+
+wellness:
+  default-timezone: Africa/Casablanca
+  default-water-goal-ml: 2000
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true

@@ -1,4 +1,4 @@
-﻿package com.digitallifetwin.planning;
+package com.digitallifetwin.planning;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
