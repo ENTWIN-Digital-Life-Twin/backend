@@ -1,0 +1,12 @@
+jwt:
+  secret: TestOnlySecretKeyNeedAtLeast32BytesLong!!
+  access-expiration: 3600
+  refresh-expiration: 604800
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
