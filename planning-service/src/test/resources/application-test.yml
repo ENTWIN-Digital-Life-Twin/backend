@@ -1,0 +1,16 @@
+jwt:
+  secret: TestOnlySecretKeyNeedAtLeast32BytesLong!!
+
+planning:
+  default-timezone: Africa/Casablanca
+  day-start: "08:00"
+  day-end: "23:00"
+  overload-threshold-ratio: 0.9
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true

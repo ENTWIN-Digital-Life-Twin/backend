@@ -10,6 +10,7 @@
       - "${DB_PORT:-5432}:5432"
     volumes:
       - dlt_postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init-databases.sh:/docker-entrypoint-initdb.d/01-init-databases.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-dlt} -d ${DB_NAME:-dlt_auth}"]
       interval: 10s
