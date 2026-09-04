@@ -17,5 +17,70 @@ services:
       timeout: 5s
       retries: 5
 
+  auth-service:
+    build:
+      context: .
+      dockerfile: auth-service/Dockerfile
+    container_name: auth-service
+    environment:
+      DB_HOST: dlt-postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-dlt_auth}
+      DB_USERNAME: ${DB_USERNAME:-dlt}
+      DB_PASSWORD: ${DB_PASSWORD:-dlt}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      SERVER_PORT: 8081
+    ports:
+      - "8081:8081"
+    depends_on:
+      dlt-postgres:
+        condition: service_healthy
+
+  planning-service:
+    build:
+      context: .
+      dockerfile: planning-service/Dockerfile
+    container_name: planning-service
+    environment:
+      DB_HOST: dlt-postgres
+      DB_PORT: 5432
+      DB_NAME: ${PLANNING_DB_NAME:-dlt_planning}
+      DB_USERNAME: ${DB_USERNAME:-dlt}
+      DB_PASSWORD: ${DB_PASSWORD:-dlt}
+      JWT_SECRET: ${JWT_SECRET}
+      PLANNING_DEFAULT_TIMEZONE: ${PLANNING_DEFAULT_TIMEZONE}
+      PLANNING_DAY_START: ${PLANNING_DAY_START}
+      PLANNING_DAY_END: ${PLANNING_DAY_END}
+      SERVER_PORT: 8082
+    ports:
+      - "8082:8082"
+    depends_on:
+      dlt-postgres:
+        condition: service_healthy
+
+  wellness-service:
+    build:
+      context: .
+      dockerfile: wellness-service/Dockerfile
+    container_name: wellness-service
+    environment:
+      DB_HOST: dlt-postgres
+      DB_PORT: 5432
+      DB_NAME: ${WELLNESS_DB_NAME:-dlt_wellness}
+      DB_USERNAME: ${DB_USERNAME:-dlt}
+      DB_PASSWORD: ${DB_PASSWORD:-dlt}
+      JWT_SECRET: ${JWT_SECRET}
+      WELLNESS_DEFAULT_TIMEZONE: ${WELLNESS_DEFAULT_TIMEZONE}
+      WELLNESS_DEFAULT_WATER_GOAL_ML: ${WELLNESS_DEFAULT_WATER_GOAL_ML}
+      SERVER_PORT: 8083
+    ports:
+      - "8083:8083"
+    depends_on:
+      dlt-postgres:
+        condition: service_healthy
+
 volumes:
   dlt_postgres_data:
