@@ -5,4 +5,6 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'dlt_planning')\gexec
     SELECT 'CREATE DATABASE dlt_wellness'
     WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'dlt_wellness')\gexec
+    SELECT 'CREATE DATABASE dlt_notification'
+    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'dlt_notification')\gexec
 EOSQL

@@ -1,6 +1,64 @@
 spring:
   application:
     name: notification-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${NOTIFICATION_DB_NAME:dlt_notification}
+    username: ${DB_USERNAME:dlt}
+    password: ${DB_PASSWORD:dlt}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
 
 server:
-  port: 8084
+  port: ${SERVER_PORT:8084}
+
+# Must match auth-service JWT_SECRET so access tokens verify correctly.
+jwt:
+  secret: ${JWT_SECRET:LocalDevOnlyChangeMe_NeedAtLeast32Bytes!!}
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200}
+
+notification:
+  scheduler:
+    fixed-delay-ms: ${NOTIFICATION_SCHEDULER_FIXED_DELAY_MS:60000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  info:
+    env:
+      enabled: true
+
+info:
+  app:
+    name: notification-service
+    description: ENTWIN Digital Life Twin Notification Service
+    version: 0.1.0
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+  api-docs:
+    path: /v3/api-docs
+
+logging:
+  level:
+    com.digitallifetwin.notification: INFO
+    org.springframework.security: INFO

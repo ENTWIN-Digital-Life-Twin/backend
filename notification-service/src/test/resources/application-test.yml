@@ -1,0 +1,17 @@
+jwt:
+  secret: LocalDevOnlyChangeMe_NeedAtLeast32Bytes!!
+
+notification:
+  scheduler:
+    fixed-delay-ms: 3600000
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  task:
+    scheduling:
+      enabled: false

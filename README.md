@@ -2,7 +2,7 @@
 
 Backend for **ENTWIN**, a university PFE project: an intelligent life-management platform (planning, wellness, notifications, and later AI recommendations).
 
-This repository is a Maven multi-module Spring Boot backend. Current milestones: **Authentication**, **Planning MVP**, and **Wellness MVP**. Notification and gateway remain placeholders.
+This repository is a Maven multi-module Spring Boot backend. Current milestones: **Authentication**, **Planning MVP**, **Wellness MVP**, and **Notification MVP**. Gateway remains a placeholder.
 
 ## Prerequisites
 
@@ -21,7 +21,7 @@ digital-life-twin-backend/
 ├── auth-service/            # fully implemented
 ├── planning-service/        # fully implemented (MVP)
 ├── wellness-service/        # fully implemented (MVP)
-├── notification-service/    # placeholder
+├── notification-service/    # fully implemented (MVP)
 └── api-gateway/             # placeholder
 ```
 
@@ -30,7 +30,7 @@ digital-life-twin-backend/
 | `auth-service` | Implemented: register, login, JWT, refresh rotation, logout, profile, password change |
 | `planning-service` | Implemented: tasks, events, categories, conflicts, daily free-time planning |
 | `wellness-service` | Implemented: sleep, hydration, meals, workouts, mood, health records, goals, daily/weekly summaries |
-| `notification-service` | Empty Spring Boot module |
+| `notification-service` | Implemented: reminders, in-app notifications, read/unread, DAILY/WEEKLY recurrence, scheduled processing |
 | `api-gateway` | Empty Spring Boot module |
 | `common` | Shared library placeholder |
 
@@ -44,13 +44,14 @@ docker compose up -d
 
 This starts `dlt-postgres` on port `5432` with a persistent volume.
 
-On **first** container init, `docker/postgres/init-databases.sh` also creates `dlt_planning` and `dlt_wellness`.
+On **first** container init, `docker/postgres/init-databases.sh` also creates `dlt_planning`, `dlt_wellness`, and `dlt_notification`.
 
 If the volume already existed before those databases were added, create them once:
 
 ```bash
 docker exec -it dlt-postgres psql -U dlt -d dlt_auth -c "CREATE DATABASE dlt_planning;"
 docker exec -it dlt-postgres psql -U dlt -d dlt_auth -c "CREATE DATABASE dlt_wellness;"
+docker exec -it dlt-postgres psql -U dlt -d dlt_auth -c "CREATE DATABASE dlt_notification;"
 ```
 
 Default local credentials (override via environment or a private `.env` file):
@@ -58,6 +59,7 @@ Default local credentials (override via environment or a private `.env` file):
 - Auth database: `dlt_auth`
 - Planning database: `dlt_planning`
 - Wellness database: `dlt_wellness`
+- Notification database: `dlt_notification`
 - Username: `dlt`
 - Password: `dlt`
 
@@ -89,6 +91,8 @@ Do not commit `.env`.
 | `WELLNESS_DB_NAME` | Wellness service database | `dlt_wellness` |
 | `WELLNESS_DEFAULT_TIMEZONE` | Temporary default TZ until auth profile sync | `Africa/Casablanca` |
 | `WELLNESS_DEFAULT_WATER_GOAL_ML` | Fallback daily water goal (auth prefs not queried) | `2000` |
+| `NOTIFICATION_DB_NAME` | Notification service database | `dlt_notification` |
+| `NOTIFICATION_SCHEDULER_FIXED_DELAY_MS` | Delay between reminder processing runs | `60000` |
 
 `application.yml` includes local-development fallbacks so the service can start without a `.env` file. Override `JWT_SECRET` and database credentials before any shared or production use.
 
@@ -231,6 +235,41 @@ Hydration totals use beverage contribution factors: WATER 100%, TEA 80%, COFFEE 
 | `GET` | `/api/v1/wellness/summary/daily?date=YYYY-MM-DD` |
 | `GET` | `/api/v1/wellness/summary/weekly?startDate=YYYY-MM-DD` |
 
+## Run notification-service
+
+PostgreSQL must include `dlt_notification`. Use the same `JWT_SECRET` as auth-service.
+
+```powershell
+.\mvnw.cmd -pl notification-service -am spring-boot:run
+```
+
+Notification listens on **http://localhost:8084**.
+
+- Swagger UI: http://localhost:8084/swagger-ui.html
+- Health: http://localhost:8084/actuator/health
+
+Notification validates JWTs with the shared secret and trusts claims. It does **not** query `auth_db`, `dlt_planning`, or `dlt_wellness`.
+
+Reminder execution is scheduler-driven and creates **IN_APP** notifications only for this MVP. EMAIL/PUSH are enum values only. Recurrence is DAILY (+1 day) or WEEKLY (+7 days) in UTC. Soft-deleted reminders and notifications are excluded from APIs and scheduling.
+
+Duplicate execution is prevented by locking the reminder row and updating `nextTriggerAt` (or disabling one-time reminders) in the same transaction as the SENT notification.
+
+Notification templates were skipped for this MVP; reminder title/message are stored and delivered as-is.
+
+### Notification API (authenticated)
+
+| Method | Path |
+| --- | --- |
+| `POST/GET` | `/api/v1/reminders` |
+| `GET/PUT/DELETE` | `/api/v1/reminders/{id}` |
+| `PATCH` | `/api/v1/reminders/{id}/enabled` |
+| `GET` | `/api/v1/notifications` |
+| `GET` | `/api/v1/notifications/{id}` |
+| `PATCH` | `/api/v1/notifications/{id}/read` |
+| `PATCH` | `/api/v1/notifications/read-all` |
+| `GET` | `/api/v1/notifications/unread-count` |
+| `DELETE` | `/api/v1/notifications/{id}` |
+
 ## Run tests
 
 Unit tests use JUnit 5 and Mockito. Integration tests use Testcontainers PostgreSQL, so Docker must be running.
@@ -248,8 +287,11 @@ Unit tests use JUnit 5 and Mockito. Integration tests use Testcontainers Postgre
 # wellness-service only
 ./mvnw -pl wellness-service -am test
 
+# notification-service only
+./mvnw -pl notification-service -am test
+
 # all implemented services
-./mvnw -pl auth-service,planning-service,wellness-service -am test
+./mvnw -pl auth-service,planning-service,wellness-service,notification-service -am test
 ```
 
 On Windows PowerShell use `.\mvnw.cmd` instead of `./mvnw`. Integration tests need Docker Desktop running; they are skipped automatically if Docker is unavailable.
@@ -257,7 +299,7 @@ On Windows PowerShell use `.\mvnw.cmd` instead of `./mvnw`. Integration tests ne
 ## Build
 
 ```bash
-./mvnw -pl auth-service,planning-service,wellness-service -am package
+./mvnw -pl auth-service,planning-service,wellness-service,notification-service -am package
 ```
 
 Auth-service image (build context is the repository root):
@@ -270,7 +312,7 @@ docker build -f auth-service/Dockerfile -t entwin-auth-service .
 
 - Integrate user timezone/availability from auth-service into planning and wellness
 - Sync daily water goal from auth-service preferences into wellness (event/API)
-- Notification business logic
+- EMAIL/PUSH delivery, RabbitMQ reminder events from Planning/Wellness/AI
 - Introduce Spring Cloud Gateway in `api-gateway`
 - Add the Python FastAPI AI service and RabbitMQ integration
 - Add GitHub Actions, AWS EC2 deployment, Prometheus, and Grafana
