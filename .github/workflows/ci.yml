@@ -22,3 +22,33 @@ jobs:
 
       - name: Build and test all services
         run: ./mvnw -pl auth-service,planning-service,wellness-service -am package -DskipTests -B
+
+      - name: Build Docker images
+        run: |
+          docker build -f auth-service/Dockerfile -t entwin-auth-service .
+          docker build -f planning-service/Dockerfile -t entwin-planning-service .
+          docker build -f wellness-service/Dockerfile -t entwin-wellness-service .
+
+      - name: Run Trivy vulnerability scanner (auth-service)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: entwin-auth-service
+          format: table
+          exit-code: 0
+          severity: CRITICAL,HIGH
+
+      - name: Run Trivy vulnerability scanner (planning-service)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: entwin-planning-service
+          format: table
+          exit-code: 0
+          severity: CRITICAL,HIGH
+
+      - name: Run Trivy vulnerability scanner (wellness-service)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: entwin-wellness-service
+          format: table
+          exit-code: 0
+          severity: CRITICAL,HIGH
