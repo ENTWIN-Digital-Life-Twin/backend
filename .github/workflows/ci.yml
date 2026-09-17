@@ -85,6 +85,7 @@ jobs:
           cmd_options: '-a'
           fail_action: false
           allow_issue_writing: false
+          artifact_name: 'zap-scan-auth-service'
 
       - name: ZAP Baseline Scan - planning-service
         uses: zaproxy/action-baseline@v0.14.0
@@ -93,6 +94,7 @@ jobs:
           cmd_options: '-a'
           fail_action: false
           allow_issue_writing: false
+          artifact_name: 'zap-scan-planning-service'
 
       - name: ZAP Baseline Scan - wellness-service
         uses: zaproxy/action-baseline@v0.14.0
@@ -101,3 +103,4 @@ jobs:
           cmd_options: '-a'
           fail_action: false
           allow_issue_writing: false
+          artifact_name: 'zap-scan-wellness-service'
