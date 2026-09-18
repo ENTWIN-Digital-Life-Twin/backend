@@ -1,5 +1,6 @@
 package com.digitallifetwin.planning.dto.response;
 
+import com.digitallifetwin.planning.dto.SubtaskPayload;
 import com.digitallifetwin.planning.enums.ComplexityLevel;
 import com.digitallifetwin.planning.enums.EnergyLevel;
 import com.digitallifetwin.planning.enums.TaskPriority;
@@ -25,6 +26,7 @@ public record TaskResponse(
         Instant createdAt,
         Instant updatedAt,
         Instant completedAt,
-        List<ScheduleConflictResponse> conflicts
+        List<ScheduleConflictResponse> conflicts,
+        List<SubtaskPayload> subtasks
 ) {
 }

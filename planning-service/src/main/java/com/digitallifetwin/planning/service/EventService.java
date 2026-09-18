@@ -10,6 +10,7 @@ import com.digitallifetwin.planning.exception.EventNotFoundException;
 import com.digitallifetwin.planning.mapper.PlanningMapper;
 import com.digitallifetwin.planning.repository.CalendarEventRepository;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +35,7 @@ public class EventService {
         event.setUserId(userId);
         apply(event, request.title(), request.description(), request.startDateTime(), request.endDateTime(),
                 request.allDay(), request.eventType(), request.locationLabel(),
-                request.recurring(), request.recurrenceRule());
+                request.recurring(), request.recurrenceRule(), request.participants());
         event.setDeleted(false);
 
         CalendarEvent saved = calendarEventRepository.save(event);
@@ -74,7 +75,7 @@ public class EventService {
         CalendarEvent event = requireOwned(userId, eventId);
         apply(event, request.title(), request.description(), request.startDateTime(), request.endDateTime(),
                 request.allDay(), request.eventType(), request.locationLabel(),
-                request.recurring(), request.recurrenceRule());
+                request.recurring(), request.recurrenceRule(), request.participants());
 
         CalendarEvent saved = calendarEventRepository.save(event);
         List<ScheduleConflictResponse> conflicts =
@@ -104,7 +105,8 @@ public class EventService {
             com.digitallifetwin.planning.enums.EventType eventType,
             String locationLabel,
             boolean recurring,
-            String recurrenceRule) {
+            String recurrenceRule,
+            List<String> participants) {
         event.setTitle(title.trim());
         event.setDescription(trimToNull(description));
         event.setStartDateTime(start);
@@ -114,6 +116,7 @@ public class EventService {
         event.setLocationLabel(trimToNull(locationLabel));
         event.setRecurring(recurring);
         event.setRecurrenceRule(recurring ? trimToNull(recurrenceRule) : null);
+        event.setParticipants(normalizeParticipants(participants));
     }
 
     private void validate(Instant start, Instant end, boolean recurring, String recurrenceRule) {
@@ -131,5 +134,28 @@ public class EventService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private List<String> normalizeParticipants(List<String> names) {
+        if (names == null || names.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<String> normalized = new ArrayList<>();
+        for (String name : names) {
+            if (normalized.size() >= 30) {
+                break;
+            }
+            if (name == null || name.isBlank()) {
+                continue;
+            }
+            String trimmed = name.trim();
+            if (trimmed.length() > 120) {
+                trimmed = trimmed.substring(0, 120);
+            }
+            if (!normalized.contains(trimmed)) {
+                normalized.add(trimmed);
+            }
+        }
+        return normalized;
     }
 }

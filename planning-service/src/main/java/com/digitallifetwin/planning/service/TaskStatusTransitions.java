@@ -12,16 +12,18 @@ public final class TaskStatusTransitions {
     private static final Map<TaskStatus, Set<TaskStatus>> ALLOWED = new EnumMap<>(TaskStatus.class);
 
     static {
-        ALLOWED.put(TaskStatus.DRAFT, EnumSet.of(TaskStatus.SCHEDULED, TaskStatus.CANCELLED));
+        ALLOWED.put(TaskStatus.DRAFT, EnumSet.of(
+                TaskStatus.SCHEDULED, TaskStatus.COMPLETED, TaskStatus.CANCELLED));
         ALLOWED.put(TaskStatus.SCHEDULED, EnumSet.of(
-                TaskStatus.IN_PROGRESS, TaskStatus.CANCELLED, TaskStatus.OVERDUE, TaskStatus.DRAFT));
+                TaskStatus.IN_PROGRESS, TaskStatus.COMPLETED, TaskStatus.CANCELLED, TaskStatus.OVERDUE, TaskStatus.DRAFT));
         ALLOWED.put(TaskStatus.IN_PROGRESS, EnumSet.of(
                 TaskStatus.PAUSED, TaskStatus.COMPLETED, TaskStatus.CANCELLED));
         ALLOWED.put(TaskStatus.PAUSED, EnumSet.of(
                 TaskStatus.IN_PROGRESS, TaskStatus.CANCELLED, TaskStatus.COMPLETED));
         ALLOWED.put(TaskStatus.OVERDUE, EnumSet.of(
                 TaskStatus.IN_PROGRESS, TaskStatus.CANCELLED, TaskStatus.COMPLETED));
-        ALLOWED.put(TaskStatus.COMPLETED, EnumSet.noneOf(TaskStatus.class));
+        ALLOWED.put(TaskStatus.COMPLETED, EnumSet.of(
+                TaskStatus.SCHEDULED, TaskStatus.IN_PROGRESS, TaskStatus.DRAFT));
         ALLOWED.put(TaskStatus.CANCELLED, EnumSet.noneOf(TaskStatus.class));
     }
 

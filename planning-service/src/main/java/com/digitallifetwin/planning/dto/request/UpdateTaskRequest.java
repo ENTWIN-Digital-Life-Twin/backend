@@ -1,5 +1,6 @@
 package com.digitallifetwin.planning.dto.request;
 
+import com.digitallifetwin.planning.dto.SubtaskPayload;
 import com.digitallifetwin.planning.enums.ComplexityLevel;
 import com.digitallifetwin.planning.enums.EnergyLevel;
 import com.digitallifetwin.planning.enums.TaskPriority;
@@ -10,6 +11,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 public record UpdateTaskRequest(
@@ -42,6 +44,8 @@ public record UpdateTaskRequest(
 
         EnergyLevel energyRequired,
 
-        ComplexityLevel complexityLevel
+        ComplexityLevel complexityLevel,
+
+        List<SubtaskPayload> subtasks
 ) {
 }

@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
+import java.util.List;
 
 public record UpdateEventRequest(
         @NotBlank(message = "Title is required")
@@ -31,6 +32,8 @@ public record UpdateEventRequest(
         boolean recurring,
 
         @Size(max = 255, message = "Recurrence rule must be at most 255 characters")
-        String recurrenceRule
+        String recurrenceRule,
+
+        List<@Size(max = 120) String> participants
 ) {
 }

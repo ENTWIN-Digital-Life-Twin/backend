@@ -35,7 +35,8 @@ public class PlanningMapper {
                 task.getCreatedAt(),
                 task.getUpdatedAt(),
                 task.getCompletedAt(),
-                conflicts
+                conflicts,
+                task.getSubtasks() == null ? List.of() : List.copyOf(task.getSubtasks())
         );
     }
 
@@ -57,7 +58,8 @@ public class PlanningMapper {
                 event.getRecurrenceRule(),
                 event.getCreatedAt(),
                 event.getUpdatedAt(),
-                conflicts
+                conflicts,
+                event.getParticipants() == null ? List.of() : List.copyOf(event.getParticipants())
         );
     }
 

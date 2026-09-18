@@ -1,5 +1,6 @@
 package com.digitallifetwin.planning.entity;
 
+import com.digitallifetwin.planning.dto.SubtaskPayload;
 import com.digitallifetwin.planning.enums.ComplexityLevel;
 import com.digitallifetwin.planning.enums.EnergyLevel;
 import com.digitallifetwin.planning.enums.TaskPriority;
@@ -15,10 +16,14 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Getter
 @Setter
@@ -90,6 +95,10 @@ public class Task {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "subtasks", nullable = false, columnDefinition = "jsonb")
+    private List<SubtaskPayload> subtasks = new ArrayList<>();
+
     @PrePersist
     void onCreate() {
         Instant now = Instant.now();
@@ -103,6 +112,9 @@ public class Task {
         }
         if (priority == null) {
             priority = TaskPriority.MEDIUM;
+        }
+        if (subtasks == null) {
+            subtasks = new ArrayList<>();
         }
     }
 

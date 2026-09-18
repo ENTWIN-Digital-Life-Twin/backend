@@ -1,5 +1,6 @@
 package com.digitallifetwin.planning.service;
 
+import com.digitallifetwin.planning.dto.SubtaskPayload;
 import com.digitallifetwin.planning.dto.request.CreateTaskRequest;
 import com.digitallifetwin.planning.dto.request.UpdateTaskRequest;
 import com.digitallifetwin.planning.dto.request.UpdateTaskStatusRequest;
@@ -15,6 +16,7 @@ import com.digitallifetwin.planning.mapper.PlanningMapper;
 import com.digitallifetwin.planning.repository.TaskCategoryRepository;
 import com.digitallifetwin.planning.repository.TaskRepository;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -51,6 +53,7 @@ public class TaskService {
         task.setComplexityLevel(request.complexityLevel());
         task.setStatus(request.startDateTime() != null ? TaskStatus.SCHEDULED : TaskStatus.DRAFT);
         task.setDeleted(false);
+        task.setSubtasks(normalizeSubtasks(request.subtasks()));
 
         Task saved = taskRepository.save(task);
         List<ScheduleConflictResponse> conflicts =
@@ -107,6 +110,7 @@ public class TaskService {
         task.setCompletionPercentage(request.completionPercentage());
         task.setEnergyRequired(request.energyRequired());
         task.setComplexityLevel(request.complexityLevel());
+        task.setSubtasks(normalizeSubtasks(request.subtasks()));
 
         if (task.getStatus() == TaskStatus.DRAFT && request.startDateTime() != null) {
             task.setStatus(TaskStatus.SCHEDULED);
@@ -168,5 +172,27 @@ public class TaskService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private List<SubtaskPayload> normalizeSubtasks(List<SubtaskPayload> items) {
+        if (items == null || items.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<SubtaskPayload> normalized = new ArrayList<>();
+        for (SubtaskPayload item : items) {
+            if (normalized.size() >= 50) {
+                break;
+            }
+            if (item == null || item.title() == null || item.title().isBlank()) {
+                continue;
+            }
+            String title = item.title().trim();
+            if (title.length() > 200) {
+                title = title.substring(0, 200);
+            }
+            UUID id = item.id() != null ? item.id() : UUID.randomUUID();
+            normalized.add(new SubtaskPayload(id, title, item.done()));
+        }
+        return normalized;
     }
 }

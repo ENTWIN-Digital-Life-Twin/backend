@@ -18,6 +18,7 @@ public record EventResponse(
         String recurrenceRule,
         Instant createdAt,
         Instant updatedAt,
-        List<ScheduleConflictResponse> conflicts
+        List<ScheduleConflictResponse> conflicts,
+        List<String> participants
 ) {
 }

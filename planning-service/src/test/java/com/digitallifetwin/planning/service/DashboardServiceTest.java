@@ -10,7 +10,9 @@ import com.digitallifetwin.planning.config.PlanningProperties;
 import com.digitallifetwin.planning.dto.response.DailyPlanResponse;
 import com.digitallifetwin.planning.dto.response.DailyPlanSummaryResponse;
 import com.digitallifetwin.planning.dto.response.DashboardStatsResponse;
+import com.digitallifetwin.planning.entity.CalendarEvent;
 import com.digitallifetwin.planning.entity.Task;
+import com.digitallifetwin.planning.enums.EventType;
 import com.digitallifetwin.planning.enums.TaskPriority;
 import com.digitallifetwin.planning.enums.TaskStatus;
 import com.digitallifetwin.planning.repository.CalendarEventRepository;
@@ -88,6 +90,23 @@ class DashboardServiceTest {
     void upcomingIsNullWhenUserHasNoEvents() {
         when(eventRepository.findByUserIdAndStartTimeBetween(eq(userId), any(), any())).thenReturn(List.of());
         assertThat(dashboardService.getUpcomingEvent(userId)).isNull();
+    }
+
+    @Test
+    void upcomingUsesStoredParticipants() {
+        CalendarEvent event = new CalendarEvent();
+        event.setId(UUID.randomUUID());
+        event.setTitle("Standup");
+        event.setStartDateTime(Instant.now().plusSeconds(3600));
+        event.setEndDateTime(Instant.now().plusSeconds(5400));
+        event.setLocationLabel("Room A");
+        event.setEventType(EventType.WORK);
+        event.setParticipants(List.of("Ada", "Karim"));
+        when(eventRepository.findByUserIdAndStartTimeBetween(eq(userId), any(), any()))
+                .thenReturn(List.of(event));
+
+        assertThat(dashboardService.getUpcomingEvent(userId).participants())
+                .containsExactly("Ada", "Karim");
     }
 
     private Task task(TaskStatus status, TaskPriority priority, int planned, Integer actual) {

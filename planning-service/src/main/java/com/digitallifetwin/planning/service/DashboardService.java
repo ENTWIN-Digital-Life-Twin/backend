@@ -146,7 +146,7 @@ public class DashboardService {
                 event.getTitle(),
                 location,
                 online,
-                parseParticipants(event.getDescription()),
+                event.getParticipants() == null ? List.of() : List.copyOf(event.getParticipants()),
                 eventType
         );
     }
@@ -227,24 +227,6 @@ public class DashboardService {
             return task.getActualDurationMinutes();
         }
         return task.getPlannedDurationMinutes() != null ? task.getPlannedDurationMinutes() : 0;
-    }
-
-    private List<String> parseParticipants(String description) {
-        List<String> participants = new ArrayList<>();
-        if (description == null || !description.contains("participants:")) {
-            return participants;
-        }
-        String[] parts = description.split("participants:", 2);
-        if (parts.length < 2) {
-            return participants;
-        }
-        for (String name : parts[1].split(",")) {
-            String trimmed = name.trim();
-            if (!trimmed.isEmpty()) {
-                participants.add(trimmed);
-            }
-        }
-        return participants;
     }
 
     private String formatDuration(long minutes) {

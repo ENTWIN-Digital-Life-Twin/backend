@@ -12,10 +12,14 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Getter
 @Setter
@@ -72,6 +76,10 @@ public class CalendarEvent {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "participants", nullable = false, columnDefinition = "jsonb")
+    private List<String> participants = new ArrayList<>();
+
     @PrePersist
     void onCreate() {
         Instant now = Instant.now();
@@ -79,6 +87,9 @@ public class CalendarEvent {
         updatedAt = now;
         if (eventType == null) {
             eventType = EventType.OTHER;
+        }
+        if (participants == null) {
+            participants = new ArrayList<>();
         }
     }
 

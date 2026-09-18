@@ -7,7 +7,9 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.digitallifetwin.planning.dto.SubtaskPayload;
 import com.digitallifetwin.planning.dto.request.CreateTaskRequest;
+import com.digitallifetwin.planning.dto.request.UpdateTaskRequest;
 import com.digitallifetwin.planning.dto.request.UpdateTaskStatusRequest;
 import com.digitallifetwin.planning.dto.response.TaskResponse;
 import com.digitallifetwin.planning.entity.Task;
@@ -66,7 +68,8 @@ class TaskServiceTest {
                 Instant.parse("2026-08-23T20:00:00Z"),
                 null,
                 EnergyLevel.HIGH,
-                ComplexityLevel.MEDIUM
+                ComplexityLevel.MEDIUM,
+                null
         );
         when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> {
             Task task = invocation.getArgument(0);
@@ -103,6 +106,7 @@ class TaskServiceTest {
                 Instant.parse("2026-08-23T17:00:00Z"),
                 null,
                 null,
+                null,
                 null
         ))).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Deadline cannot be before");
@@ -123,13 +127,44 @@ class TaskServiceTest {
 
     @Test
     void statusTransition_rejected() {
-        Task task = ownedTask(TaskStatus.COMPLETED);
+        Task task = ownedTask(TaskStatus.CANCELLED);
         when(taskRepository.findByIdAndUserIdAndDeletedFalse(task.getId(), userId))
                 .thenReturn(Optional.of(task));
 
         assertThatThrownBy(() -> taskService.updateStatus(
-                userId, task.getId(), new UpdateTaskStatusRequest(TaskStatus.IN_PROGRESS)))
+                userId, task.getId(), new UpdateTaskStatusRequest(TaskStatus.COMPLETED)))
                 .isInstanceOf(InvalidTaskStateTransitionException.class);
+    }
+
+    @Test
+    void completeTask_fromScheduled_isAllowed() {
+        Task task = ownedTask(TaskStatus.SCHEDULED);
+        when(taskRepository.findByIdAndUserIdAndDeletedFalse(task.getId(), userId))
+                .thenReturn(Optional.of(task));
+        when(taskRepository.save(task)).thenReturn(task);
+
+        TaskResponse response = taskService.updateStatus(
+                userId, task.getId(), new UpdateTaskStatusRequest(TaskStatus.COMPLETED));
+
+        assertThat(response.status()).isEqualTo(TaskStatus.COMPLETED);
+        assertThat(response.completionPercentage()).isEqualTo(100);
+        assertThat(response.completedAt()).isNotNull();
+    }
+
+    @Test
+    void reopenCompletedTask_toScheduled_isAllowed() {
+        Task task = ownedTask(TaskStatus.COMPLETED);
+        task.setCompletedAt(Instant.now());
+        task.setCompletionPercentage(100);
+        when(taskRepository.findByIdAndUserIdAndDeletedFalse(task.getId(), userId))
+                .thenReturn(Optional.of(task));
+        when(taskRepository.save(task)).thenReturn(task);
+
+        TaskResponse response = taskService.updateStatus(
+                userId, task.getId(), new UpdateTaskStatusRequest(TaskStatus.SCHEDULED));
+
+        assertThat(response.status()).isEqualTo(TaskStatus.SCHEDULED);
+        assertThat(response.completedAt()).isNull();
     }
 
     @Test
@@ -146,6 +181,75 @@ class TaskServiceTest {
         assertThat(response.status()).isEqualTo(TaskStatus.COMPLETED);
         assertThat(response.completionPercentage()).isEqualTo(100);
         assertThat(response.completedAt()).isNotNull();
+    }
+
+    @Test
+    void createTask_persistsNormalizedSubtasks() {
+        UUID keptId = UUID.randomUUID();
+        CreateTaskRequest request = new CreateTaskRequest(
+                "Study Spring Boot",
+                "Review security",
+                null,
+                TaskPriority.HIGH,
+                90,
+                Instant.parse("2026-08-23T17:00:00Z"),
+                Instant.parse("2026-08-23T20:00:00Z"),
+                null,
+                EnergyLevel.HIGH,
+                ComplexityLevel.MEDIUM,
+                List.of(
+                        new SubtaskPayload(keptId, "Read docs", true),
+                        new SubtaskPayload(null, "  Write notes  ", false),
+                        new SubtaskPayload(null, "   ", false)
+                )
+        );
+        when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> {
+            Task task = invocation.getArgument(0);
+            task.setId(UUID.randomUUID());
+            task.setCreatedAt(Instant.now());
+            task.setUpdatedAt(Instant.now());
+            return task;
+        });
+        when(scheduleConflictService.findConflictsForTask(eq(userId), any(Task.class), any()))
+                .thenReturn(List.of());
+
+        TaskResponse response = taskService.create(userId, request);
+
+        assertThat(response.subtasks()).hasSize(2);
+        assertThat(response.subtasks().getFirst().id()).isEqualTo(keptId);
+        assertThat(response.subtasks().getFirst().title()).isEqualTo("Read docs");
+        assertThat(response.subtasks().get(1).title()).isEqualTo("Write notes");
+        assertThat(response.subtasks().get(1).id()).isNotNull();
+    }
+
+    @Test
+    void updateTask_replacesSubtasks() {
+        Task task = ownedTask(TaskStatus.SCHEDULED);
+        UUID keptId = UUID.randomUUID();
+        when(taskRepository.findByIdAndUserIdAndDeletedFalse(task.getId(), userId))
+                .thenReturn(Optional.of(task));
+        when(taskRepository.save(task)).thenReturn(task);
+        when(scheduleConflictService.findConflictsForTask(eq(userId), any(Task.class), any()))
+                .thenReturn(List.of());
+
+        TaskResponse response = taskService.update(userId, task.getId(), new UpdateTaskRequest(
+                "Task",
+                null,
+                null,
+                TaskPriority.MEDIUM,
+                60,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null,
+                List.of(new SubtaskPayload(keptId, "Slides", true))
+        ));
+
+        assertThat(response.subtasks()).hasSize(1);
+        assertThat(response.subtasks().getFirst().id()).isEqualTo(keptId);
+        assertThat(response.subtasks().getFirst().done()).isTrue();
     }
 
     private Task ownedTask(TaskStatus status) {

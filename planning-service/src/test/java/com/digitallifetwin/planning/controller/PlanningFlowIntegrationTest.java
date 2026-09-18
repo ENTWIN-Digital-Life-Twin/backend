@@ -190,7 +190,17 @@ class PlanningFlowIntegrationTest {
         mockMvc.perform(post("/api/v1/events")
                         .header("Authorization", auth)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(eventJson("Client call", start.toString(), end.toString(), "APPOINTMENT")))
+                        .content("""
+                                {
+                                  "title": "Client call",
+                                  "startDateTime": "%s",
+                                  "endDateTime": "%s",
+                                  "allDay": false,
+                                  "eventType": "APPOINTMENT",
+                                  "recurring": false,
+                                  "participants": ["Ada", "Karim"]
+                                }
+                                """.formatted(start, end)))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(get("/api/v1/dashboard/upcoming").header("Authorization", auth))
@@ -199,7 +209,8 @@ class PlanningFlowIntegrationTest {
                 .andExpect(jsonPath("$.id").exists())
                 .andExpect(jsonPath("$.time").exists())
                 .andExpect(jsonPath("$.isOnline").exists())
-                .andExpect(jsonPath("$.participants").isArray())
+                .andExpect(jsonPath("$.participants.length()").value(2))
+                .andExpect(jsonPath("$.participants[0]").value("Ada"))
                 .andExpect(jsonPath("$.eventType").value("APPOINTMENT"));
 
         mockMvc.perform(get("/api/v1/dashboard/timeline").header("Authorization", auth))
@@ -244,6 +255,118 @@ class PlanningFlowIntegrationTest {
                         .param("to", "2026-08-24T00:00:00Z"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(1));
+    }
+
+    @Test
+    void tasks_subtasksPersistAndStayOwned() throws Exception {
+        UUID owner = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        String subtaskId = UUID.randomUUID().toString();
+        String auth = TestJwtFactory.bearer(owner);
+
+        MvcResult created = mockMvc.perform(post("/api/v1/tasks")
+                        .header("Authorization", auth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Prepare demo",
+                                  "priority": "HIGH",
+                                  "plannedDurationMinutes": 45,
+                                  "startDateTime": "2026-08-23T09:00:00Z",
+                                  "deadline": "2026-08-23T12:00:00Z",
+                                  "subtasks": [
+                                    {"id": "%s", "title": "Slides", "done": false},
+                                    {"title": "Rehearse", "done": true}
+                                  ]
+                                }
+                                """.formatted(subtaskId)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.subtasks.length()").value(2))
+                .andExpect(jsonPath("$.subtasks[0].id").value(subtaskId))
+                .andExpect(jsonPath("$.subtasks[0].title").value("Slides"))
+                .andExpect(jsonPath("$.subtasks[1].done").value(true))
+                .andReturn();
+
+        String taskId = objectMapper.readTree(created.getResponse().getContentAsString()).get("id").asText();
+
+        mockMvc.perform(put("/api/v1/tasks/" + taskId)
+                        .header("Authorization", auth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Prepare demo",
+                                  "priority": "HIGH",
+                                  "plannedDurationMinutes": 45,
+                                  "startDateTime": "2026-08-23T09:00:00Z",
+                                  "deadline": "2026-08-23T12:00:00Z",
+                                  "completionPercentage": 50,
+                                  "subtasks": [
+                                    {"id": "%s", "title": "Slides", "done": true}
+                                  ]
+                                }
+                                """.formatted(subtaskId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subtasks.length()").value(1))
+                .andExpect(jsonPath("$.subtasks[0].done").value(true));
+
+        mockMvc.perform(get("/api/v1/tasks/" + taskId)
+                        .header("Authorization", TestJwtFactory.bearer(other)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void events_participantsPersistAndStayOwned() throws Exception {
+        UUID owner = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        String auth = TestJwtFactory.bearer(owner);
+
+        MvcResult created = mockMvc.perform(post("/api/v1/events")
+                        .header("Authorization", auth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Client call",
+                                  "startDateTime": "2026-08-23T10:00:00Z",
+                                  "endDateTime": "2026-08-23T11:00:00Z",
+                                  "allDay": false,
+                                  "eventType": "APPOINTMENT",
+                                  "recurring": false,
+                                  "participants": ["Ada", "Karim", "Ada", ""]
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.participants.length()").value(2))
+                .andExpect(jsonPath("$.participants[0]").value("Ada"))
+                .andExpect(jsonPath("$.participants[1]").value("Karim"))
+                .andReturn();
+
+        String eventId = objectMapper.readTree(created.getResponse().getContentAsString()).get("id").asText();
+
+        mockMvc.perform(get("/api/v1/events/" + eventId).header("Authorization", auth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.participants[0]").value("Ada"));
+
+        mockMvc.perform(put("/api/v1/events/" + eventId)
+                        .header("Authorization", auth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Client call",
+                                  "startDateTime": "2026-08-23T10:00:00Z",
+                                  "endDateTime": "2026-08-23T11:00:00Z",
+                                  "allDay": false,
+                                  "eventType": "APPOINTMENT",
+                                  "recurring": false,
+                                  "participants": ["Ada"]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.participants.length()").value(1))
+                .andExpect(jsonPath("$.participants[0]").value("Ada"));
+
+        mockMvc.perform(get("/api/v1/events/" + eventId)
+                        .header("Authorization", TestJwtFactory.bearer(other)))
+                .andExpect(status().isNotFound());
     }
 
     @Test
