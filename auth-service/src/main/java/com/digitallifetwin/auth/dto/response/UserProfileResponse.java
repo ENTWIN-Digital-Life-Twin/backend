@@ -25,6 +25,7 @@ public record UserProfileResponse(
         Instant createdAt,
         Instant updatedAt,
         Instant lastLoginAt,
+        String bio,
         List<String> roles
 ) {
 }

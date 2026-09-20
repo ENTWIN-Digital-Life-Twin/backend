@@ -62,6 +62,9 @@ public class UserServiceImpl implements UserService {
         if (request.timezone() != null) {
             user.setTimezone(request.timezone().trim());
         }
+        if (request.bio() != null) {
+            user.setBio(request.bio().trim());
+        }
 
         return userMapper.toProfileResponse(userRepository.save(user));
     }
@@ -70,7 +73,9 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public MessageResponse changePassword(UUID currentUserId, ChangePasswordRequest request) {
         User user = requireUser(currentUserId);
-        if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
+        String passwordHash = user.getPasswordHash();
+        if (passwordHash == null || passwordHash.isBlank()
+                || !passwordEncoder.matches(request.currentPassword(), passwordHash)) {
             throw new InvalidCredentialsException("Current password is incorrect");
         }
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));

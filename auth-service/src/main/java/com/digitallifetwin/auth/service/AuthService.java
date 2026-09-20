@@ -1,5 +1,6 @@
 package com.digitallifetwin.auth.service;
 
+import com.digitallifetwin.auth.dto.request.GoogleLoginRequest;
 import com.digitallifetwin.auth.dto.request.LoginRequest;
 import com.digitallifetwin.auth.dto.request.LogoutRequest;
 import com.digitallifetwin.auth.dto.request.RefreshTokenRequest;
@@ -13,6 +14,8 @@ public interface AuthService {
     UserResponse register(RegisterRequest request);
 
     AuthResponse login(LoginRequest request);
+
+    AuthResponse loginWithGoogle(GoogleLoginRequest request);
 
     AuthResponse refresh(RefreshTokenRequest request);
 

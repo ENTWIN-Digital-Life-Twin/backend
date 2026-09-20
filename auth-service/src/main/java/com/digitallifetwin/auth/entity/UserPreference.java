@@ -65,6 +65,12 @@ public class UserPreference {
     @Column(name = "traffic_integration_enabled", nullable = false)
     private boolean trafficIntegrationEnabled;
 
+    @Column(name = "ui_settings", columnDefinition = "TEXT")
+    private String uiSettings;
+
+    @Column(name = "assistant_conversations", columnDefinition = "TEXT")
+    private String assistantConversations;
+
     public static UserPreference defaultsFor(User user) {
         UserPreference preference = new UserPreference();
         preference.setUser(user);

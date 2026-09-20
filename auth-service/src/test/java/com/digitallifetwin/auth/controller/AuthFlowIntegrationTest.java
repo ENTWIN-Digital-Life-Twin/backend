@@ -34,7 +34,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 
-@SpringBootTest
+@SpringBootTest(properties = "auth.expose-reset-token=true")
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Testcontainers(disabledWithoutDocker = true)
@@ -65,7 +65,7 @@ class AuthFlowIntegrationTest {
 
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(registerJson("John", "Doe", email, "StrongPassword123!")))
+                        .content(registerJson("John", "Doe", email, "StrongPassword123!", issueCode(email))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.email").value(email))
                 .andExpect(jsonPath("$.firstName").value("John"))
@@ -75,13 +75,54 @@ class AuthFlowIntegrationTest {
     }
 
     @Test
+    void register_withProfile_persistsBodyMetrics() throws Exception {
+        String email = uniqueEmail("profile");
+        String body = """
+                {
+                  "firstName": "Lina",
+                  "lastName": "Benali",
+                  "email": "%s",
+                  "password": "StrongPassword123!",
+                  "gender": "FEMALE",
+                  "dateOfBirth": "1999-03-21",
+                  "heightCm": 168.0,
+                  "weightKg": 61.5,
+                  "occupationType": "STUDENT",
+                  "verificationCode": "%s"
+                }
+                """.formatted(email, issueCode(email));
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated());
+
+        MvcResult login = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginJson(email, "StrongPassword123!")))
+                .andExpect(status().isOk())
+                .andReturn();
+        String accessToken = objectMapper.readTree(login.getResponse().getContentAsString())
+                .get("accessToken").asText();
+
+        mockMvc.perform(get("/api/users/me")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gender").value("FEMALE"))
+                .andExpect(jsonPath("$.heightCm").value(168.0))
+                .andExpect(jsonPath("$.weightKg").value(61.5))
+                .andExpect(jsonPath("$.occupationType").value("STUDENT"))
+                .andExpect(jsonPath("$.dateOfBirth").value("1999-03-21"));
+    }
+
+    @Test
     void register_duplicateEmail_returnsConflict() throws Exception {
         String email = uniqueEmail("duplicate");
         register(email, "StrongPassword123!");
 
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(registerJson("John", "Doe", email, "StrongPassword123!")))
+                        .content(registerJson("John", "Doe", email, "StrongPassword123!", "123456")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.status").value(409))
                 .andExpect(jsonPath("$.error").value("CONFLICT"));
@@ -91,7 +132,7 @@ class AuthFlowIntegrationTest {
     void register_invalidEmail_returnsBadRequest() throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(registerJson("John", "Doe", "not-an-email", "StrongPassword123!")))
+                        .content(registerJson("John", "Doe", "not-an-email", "StrongPassword123!", "123456")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.fieldErrors.email").exists());
@@ -101,7 +142,7 @@ class AuthFlowIntegrationTest {
     void register_invalidPassword_returnsBadRequest() throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(registerJson("John", "Doe", uniqueEmail("short"), "123")))
+                        .content(registerJson("John", "Doe", uniqueEmail("short"), "123", "123456")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fieldErrors.password").exists());
     }
@@ -128,7 +169,11 @@ class AuthFlowIntegrationTest {
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(loginJson("unknown@example.com", "StrongPassword123!")))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("X-Frame-Options", "DENY"))
+                .andExpect(header().string("Content-Security-Policy", "frame-ancestors 'none'"))
+                .andExpect(header().string("Referrer-Policy", "no-referrer"));
     }
 
     @Test
@@ -330,7 +375,7 @@ class AuthFlowIntegrationTest {
     private void register(String email, String password) throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(registerJson("John", "Doe", email, password)))
+                        .content(registerJson("John", "Doe", email, password, issueCode(email))))
                 .andExpect(status().isCreated());
     }
 
@@ -352,15 +397,26 @@ class AuthFlowIntegrationTest {
         return prefix + "-" + UUID.randomUUID() + "@example.com";
     }
 
-    private String registerJson(String firstName, String lastName, String email, String password) {
+    private String issueCode(String email) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/auth/register/send-code")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + email + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.verificationCode").isString())
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString()).get("verificationCode").asText();
+    }
+
+    private String registerJson(String firstName, String lastName, String email, String password, String code) {
         return """
                 {
                   "firstName": "%s",
                   "lastName": "%s",
                   "email": "%s",
-                  "password": "%s"
+                  "password": "%s",
+                  "verificationCode": "%s"
                 }
-                """.formatted(firstName, lastName, email, password);
+                """.formatted(firstName, lastName, email, password, code);
     }
 
     private String loginJson(String email, String password) {

@@ -38,10 +38,40 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, ex.getMessage(), request, null);
     }
 
-    @ExceptionHandler({InvalidCredentialsException.class, InvalidRefreshTokenException.class})
+    @ExceptionHandler({InvalidResetTokenException.class, InvalidVerificationCodeException.class})
+    public ResponseEntity<ErrorResponse> handleInvalidResetToken(
+            RuntimeException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request, null);
+    }
+
+    @ExceptionHandler(MailNotSentException.class)
+    public ResponseEntity<ErrorResponse> handleMailNotSent(
+            MailNotSentException ex, HttpServletRequest request) {
+        return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request, null);
+    }
+
+    @ExceptionHandler({InvalidCredentialsException.class, InvalidRefreshTokenException.class, InvalidGoogleTokenException.class})
     public ResponseEntity<ErrorResponse> handleUnauthorized(
             RuntimeException ex, HttpServletRequest request) {
         return build(HttpStatus.UNAUTHORIZED, ex.getMessage(), request, null);
+    }
+
+    @ExceptionHandler(AccountLinkingRequiredException.class)
+    public ResponseEntity<ErrorResponse> handleAccountLinkingRequired(
+            AccountLinkingRequiredException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, ex.getMessage(), request, null);
+    }
+
+    @ExceptionHandler(GoogleEmailNotVerifiedException.class)
+    public ResponseEntity<ErrorResponse> handleUnverifiedGoogleEmail(
+            GoogleEmailNotVerifiedException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request, null);
+    }
+
+    @ExceptionHandler(GoogleLoginNotConfiguredException.class)
+    public ResponseEntity<ErrorResponse> handleGoogleNotConfigured(
+            GoogleLoginNotConfiguredException ex, HttpServletRequest request) {
+        return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request, null);
     }
 
     @ExceptionHandler(AccountDisabledException.class)

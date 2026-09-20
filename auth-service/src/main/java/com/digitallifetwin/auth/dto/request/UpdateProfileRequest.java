@@ -31,6 +31,9 @@ public record UpdateProfileRequest(
         String preferredLanguage,
 
         @Size(min = 1, max = 100, message = "Timezone must be between 1 and 100 characters")
-        String timezone
+        String timezone,
+
+        @Size(max = 1000, message = "Bio must be at most 1000 characters")
+        String bio
 ) {
 }

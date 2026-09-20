@@ -90,13 +90,15 @@ class UserServiceTest {
                 62.5,
                 OccupationType.STUDENT,
                 "fr",
-                "Africa/Tunis"
+                "Africa/Tunis",
+                "Engineering student"
         ));
 
         assertThat(updated.firstName()).isEqualTo("Jane");
         assertThat(updated.lastName()).isEqualTo("Smith");
         assertThat(updated.occupationType()).isEqualTo(OccupationType.STUDENT);
         assertThat(updated.timezone()).isEqualTo("Africa/Tunis");
+        assertThat(updated.bio()).isEqualTo("Engineering student");
         assertThat(user.getEmail()).isEqualTo("john@example.com");
     }
 
@@ -121,5 +123,15 @@ class UserServiceTest {
 
         assertThat(user.getPasswordHash()).isEqualTo("new-hash");
         verify(refreshTokenService).revokeAllForUser(user);
+    }
+
+    @Test
+    void changePassword_googleOnlyUserWithoutPassword_throwsInvalidCredentials() {
+        user.setPasswordHash(null);
+        when(userRepository.findByIdWithRoles(userId)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> userService.changePassword(
+                userId, new ChangePasswordRequest("old-password", "NewPassword123!")))
+                .isInstanceOf(InvalidCredentialsException.class);
     }
 }

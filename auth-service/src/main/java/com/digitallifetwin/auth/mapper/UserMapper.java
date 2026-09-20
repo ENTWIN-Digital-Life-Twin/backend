@@ -38,6 +38,7 @@ public class UserMapper {
                 user.getCreatedAt(),
                 user.getUpdatedAt(),
                 user.getLastLoginAt(),
+                user.getBio(),
                 roleNames(user)
         );
     }
