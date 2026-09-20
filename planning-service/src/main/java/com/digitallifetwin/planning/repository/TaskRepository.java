@@ -50,6 +50,19 @@ public interface TaskRepository extends JpaRepository<Task, UUID>, JpaSpecificat
             @Param("lookbackStart") Instant lookbackStart,
             @Param("dayEnd") Instant dayEnd);
 
+    @Query("""
+            SELECT t FROM Task t
+            WHERE t.userId = :userId
+              AND t.deleted = false
+              AND ((t.deadline >= :startOfDay AND t.deadline < :endOfDay)
+                   OR (t.startDateTime >= :startOfDay AND t.startDateTime < :endOfDay))
+            ORDER BY t.deadline ASC, t.startDateTime ASC
+            """)
+    List<Task> findByUserIdAndDueDateBetween(
+            @Param("userId") UUID userId,
+            @Param("startOfDay") Instant startOfDay,
+            @Param("endOfDay") Instant endOfDay);
+
     static Specification<Task> withFilters(
             UUID userId,
             TaskStatus status,

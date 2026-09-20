@@ -29,6 +29,19 @@ public interface CalendarEventRepository
             @Param("rangeStart") Instant rangeStart,
             @Param("rangeEnd") Instant rangeEnd);
 
+    @Query("""
+            SELECT e FROM CalendarEvent e
+            WHERE e.userId = :userId
+              AND e.deleted = false
+              AND e.startDateTime >= :startTime
+              AND e.startDateTime < :endTime
+            ORDER BY e.startDateTime ASC
+            """)
+    List<CalendarEvent> findByUserIdAndStartTimeBetween(
+            @Param("userId") UUID userId,
+            @Param("startTime") Instant startTime,
+            @Param("endTime") Instant endTime);
+
     static Specification<CalendarEvent> withFilters(UUID userId, Instant from, Instant to) {
         return (root, query, cb) -> {
             List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
