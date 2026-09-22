@@ -66,7 +66,12 @@ public class AuthRateLimitFilter implements GlobalFilter, Ordered {
         String path = request.getURI().getRawPath();
         return "/api/auth/login".equals(path)
                 || "/api/auth/register".equals(path)
-                || "/api/auth/refresh".equals(path);
+                || "/api/auth/register/send-code".equals(path)
+                || "/api/auth/google".equals(path)
+                || "/api/auth/refresh".equals(path)
+                || "/api/auth/forgot-password".equals(path)
+                || "/api/auth/reset-password".equals(path)
+                || "/api/auth/contact".equals(path);
     }
 
     private String clientKey(ServerHttpRequest request) {

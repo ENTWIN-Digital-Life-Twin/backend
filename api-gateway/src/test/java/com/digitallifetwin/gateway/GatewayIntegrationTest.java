@@ -322,10 +322,54 @@ class GatewayIntegrationTest {
         }
 
         @Test
+        void publicRegisterSendCodeWithoutJwt() {
+            enqueueJson(authServer, 200, "{}");
+            webTestClient.post().uri("/api/auth/register/send-code")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue("{\"email\":\"ada@example.com\"}")
+                    .exchange()
+                    .expectStatus().isOk();
+        }
+
+        @Test
+        void publicForgotPasswordWithoutJwt() {
+            enqueueJson(authServer, 200, "{}");
+            webTestClient.post().uri("/api/auth/forgot-password")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue("{\"email\":\"ada@example.com\"}")
+                    .exchange()
+                    .expectStatus().isOk();
+        }
+
+        @Test
+        void publicGoogleLoginWithoutJwt() {
+            enqueueJson(authServer, 200, "{}");
+            webTestClient.post().uri("/api/auth/google")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue("{\"credential\":\"google-id-token\"}")
+                    .exchange()
+                    .expectStatus().isOk();
+        }
+
+        @Test
+        void publicContactWithoutJwt() {
+            enqueueJson(authServer, 201, "{}");
+            webTestClient.post().uri("/api/auth/contact")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue("{\"name\":\"Ada\",\"email\":\"ada@example.com\",\"subject\":\"Hi\",\"message\":\"Hello there\"}")
+                    .exchange()
+                    .expectStatus().isEqualTo(201);
+        }
+
+        @Test
         void protectedWithoutJwtReturns401() {
             webTestClient.get().uri("/api/v1/tasks")
                     .exchange()
                     .expectStatus().isUnauthorized()
+                    .expectHeader().valueEquals("X-Content-Type-Options", "nosniff")
+                    .expectHeader().valueEquals("X-Frame-Options", "DENY")
+                    .expectHeader().valueEquals("Content-Security-Policy", "frame-ancestors 'none'")
+                    .expectHeader().valueEquals("Referrer-Policy", "no-referrer")
                     .expectBody()
                     .jsonPath("$.status").isEqualTo(401)
                     .jsonPath("$.correlationId").exists();
