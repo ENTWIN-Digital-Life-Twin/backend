@@ -21,5 +21,5 @@ RUN addgroup -S app && adduser -S app -G app
 COPY --from=build /workspace/ai-service/target/ai-service-*.jar /app/app.jar
 USER app
 
-EXPOSE 8090
+EXPOSE 8091
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

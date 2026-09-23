@@ -114,7 +114,7 @@ public class InsightService {
                 "productivity-today",
                 "productivity",
                 risk,
-                75,
+                82,
                 "Productivity today",
                 "Derived from today's completed tasks and focus time versus your plan.",
                 recommendation,
@@ -152,7 +152,7 @@ public class InsightService {
                 "schedule-today",
                 "schedule",
                 risk,
-                70,
+                86,
                 "Schedule load",
                 "Occupied versus free time in today's plan.",
                 recommendation,
@@ -172,7 +172,7 @@ public class InsightService {
                 "nutrition-weekly",
                 "nutrition",
                 risk,
-                65,
+                80,
                 "Nutrition this week",
                 "Average daily calories logged this week.",
                 recommendation,
@@ -183,7 +183,7 @@ public class InsightService {
         return switch (risk.riskLevel()) {
             case "HIGH" -> 88;
             case "MODERATE" -> 82;
-            default -> 78;
+            default -> 80;
         };
     }
 

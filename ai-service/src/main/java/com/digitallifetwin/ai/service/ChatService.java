@@ -68,7 +68,11 @@ public class ChatService {
         String verdict = minutes < RuleEngineService.LOW_SLEEP_MINUTES
                 ? "That's below the 8h target — try shifting bedtime earlier tonight."
                 : "That's a solid average — keep it consistent.";
-        return answer(String.format(Locale.ROOT, "You've averaged %.1fh of sleep this week. %s", hours, verdict));
+        return answer(String.format(
+                Locale.ROOT,
+                "You've averaged %.1fh of sleep this week. %s Duration is calculated from bedtime to wake-up in Well-being.",
+                hours,
+                verdict));
     }
 
     private ChatResponse hydrationReply(String rawToken) {
