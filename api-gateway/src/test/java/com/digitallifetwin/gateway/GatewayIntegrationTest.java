@@ -35,6 +35,7 @@ class GatewayIntegrationTest {
     private static final MockWebServer planningServer;
     private static final MockWebServer wellnessServer;
     private static final MockWebServer notificationServer;
+    private static final MockWebServer aiServer;
 
     static {
         try {
@@ -42,10 +43,12 @@ class GatewayIntegrationTest {
             planningServer = new MockWebServer();
             wellnessServer = new MockWebServer();
             notificationServer = new MockWebServer();
+            aiServer = new MockWebServer();
             authServer.start();
             planningServer.start();
             wellnessServer.start();
             notificationServer.start();
+            aiServer.start();
         } catch (IOException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -63,6 +66,7 @@ class GatewayIntegrationTest {
         planningServer.shutdown();
         wellnessServer.shutdown();
         notificationServer.shutdown();
+        aiServer.shutdown();
     }
 
     @DynamicPropertySource
@@ -71,6 +75,7 @@ class GatewayIntegrationTest {
         registry.add("PLANNING_SERVICE_URL", () -> planningServer.url("/").toString().replaceAll("/$", ""));
         registry.add("WELLNESS_SERVICE_URL", () -> wellnessServer.url("/").toString().replaceAll("/$", ""));
         registry.add("NOTIFICATION_SERVICE_URL", () -> notificationServer.url("/").toString().replaceAll("/$", ""));
+        registry.add("AI_SERVICE_URL", () -> aiServer.url("/").toString().replaceAll("/$", ""));
         registry.add("jwt.secret", () -> TestJwtFactory.SECRET);
         registry.add("CORS_ALLOWED_ORIGINS", () -> "http://localhost:4200");
         registry.add("cors.allowed-origins", () -> "http://localhost:4200");
@@ -85,6 +90,7 @@ class GatewayIntegrationTest {
         resetMockServer(planningServer);
         resetMockServer(wellnessServer);
         resetMockServer(notificationServer);
+        resetMockServer(aiServer);
     }
 
     private static void resetMockServer(MockWebServer server) throws InterruptedException {
@@ -145,6 +151,17 @@ class GatewayIntegrationTest {
         }
 
         @Test
+        void routesDashboardStats() throws InterruptedException {
+            enqueueJson(planningServer, 200, "{}");
+            webTestClient.get().uri("/api/v1/dashboard/stats")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtFactory.validToken())
+                    .exchange()
+                    .expectStatus().isOk();
+            RecordedRequest recorded = take(planningServer);
+            assertEquals("/api/v1/dashboard/stats", recorded.getPath());
+        }
+
+        @Test
         void routesEvents() throws InterruptedException {
             enqueueJson(planningServer, 200, "[]");
             webTestClient.get().uri("/api/v1/events")
@@ -178,6 +195,17 @@ class GatewayIntegrationTest {
         }
 
         @Test
+        void routesWellnessDashboard() throws InterruptedException {
+            enqueueJson(wellnessServer, 200, "{}");
+            webTestClient.get().uri("/api/v1/wellness/dashboard")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtFactory.validToken())
+                    .exchange()
+                    .expectStatus().isOk();
+            RecordedRequest recorded = take(wellnessServer);
+            assertEquals("/api/v1/wellness/dashboard", recorded.getPath());
+        }
+
+        @Test
         void routesReminders() throws InterruptedException {
             enqueueJson(notificationServer, 200, "[]");
             webTestClient.get().uri("/api/v1/reminders")
@@ -197,6 +225,19 @@ class GatewayIntegrationTest {
                     .expectStatus().isOk();
             RecordedRequest recorded = take(notificationServer);
             assertEquals("/api/v1/notifications", recorded.getPath());
+        }
+
+        @Test
+        void routesAiChat() throws InterruptedException {
+            enqueueJson(aiServer, 200, "{\"answer\":\"ok\"}");
+            webTestClient.post().uri("/api/v1/ai/chat")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtFactory.validToken())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue("{\"question\":\"How do I create a task?\"}")
+                    .exchange()
+                    .expectStatus().isOk();
+            RecordedRequest recorded = take(aiServer);
+            assertEquals("/api/v1/ai/chat", recorded.getPath());
         }
     }
 

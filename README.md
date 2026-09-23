@@ -113,6 +113,7 @@ Do not commit `.env`.
 | `PLANNING_SERVICE_URL` | Downstream planning base URL | `http://localhost:8082` |
 | `WELLNESS_SERVICE_URL` | Downstream wellness base URL | `http://localhost:8083` |
 | `NOTIFICATION_SERVICE_URL` | Downstream notification base URL | `http://localhost:8084` |
+| `AI_SERVICE_URL` | Downstream ENTWIN AI assistant | `http://localhost:8090` |
 | `GATEWAY_AUTH_RATE_LIMIT_REQUESTS` | Auth endpoint rate limit (per window) | `20` |
 | `GATEWAY_AUTH_RATE_LIMIT_WINDOW_SECONDS` | Auth rate-limit window | `60` |
 | `PLANNING_DB_NAME` | Planning service database | `dlt_planning` |
@@ -142,9 +143,10 @@ Single external entry point for Angular. Preserves existing public API paths (no
 | External path | Downstream |
 | --- | --- |
 | `/api/auth/**`, `/api/users/**` | `AUTH_SERVICE_URL` (default `http://localhost:8081`) |
-| `/api/v1/tasks/**`, `/api/v1/task-categories/**`, `/api/v1/planning/**`, `/api/v1/events/**` | `PLANNING_SERVICE_URL` |
+| `/api/v1/tasks/**`, `/api/v1/task-categories/**`, `/api/v1/planning/**`, `/api/v1/events/**`, `/api/v1/dashboard/**` | `PLANNING_SERVICE_URL` |
 | `/api/v1/wellness/**` | `WELLNESS_SERVICE_URL` |
 | `/api/v1/reminders/**`, `/api/v1/notifications/**` | `NOTIFICATION_SERVICE_URL` |
+| `/api/v1/ai/**` | `AI_SERVICE_URL` (default `http://localhost:8090`) |
 
 ### JWT behavior (defense in depth)
 
@@ -440,7 +442,6 @@ docker build -f api-gateway/Dockerfile -t entwin-api-gateway .
 - EMAIL/PUSH delivery, RabbitMQ reminder events from Planning/Wellness/AI
 - Distributed rate limiting / token introspection or short-lived access tokens
 - Gateway Swagger aggregation
-- Add the Python FastAPI AI service and RabbitMQ integration
 - Add GitHub Actions, AWS EC2 deployment, Prometheus, and Grafana
 - Email verification and password-reset flows
 - User preference management API

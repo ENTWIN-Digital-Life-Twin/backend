@@ -51,6 +51,7 @@ class DownstreamUnavailableIntegrationTest {
         registry.add("PLANNING_SERVICE_URL", () -> "http://127.0.0.1:" + CLOSED_PLANNING_PORT);
         registry.add("WELLNESS_SERVICE_URL", () -> "http://127.0.0.1:" + CLOSED_PLANNING_PORT);
         registry.add("NOTIFICATION_SERVICE_URL", () -> "http://127.0.0.1:" + CLOSED_PLANNING_PORT);
+        registry.add("AI_SERVICE_URL", () -> "http://127.0.0.1:" + CLOSED_PLANNING_PORT);
         registry.add("jwt.secret", () -> TestJwtFactory.SECRET);
         registry.add("cors.allowed-origins", () -> "http://localhost:4200");
     }

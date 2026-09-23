@@ -46,6 +46,7 @@ class CorsHttpClientIntegrationTest {
         registry.add("PLANNING_SERVICE_URL", () -> "http://127.0.0.1:9");
         registry.add("WELLNESS_SERVICE_URL", () -> "http://127.0.0.1:9");
         registry.add("NOTIFICATION_SERVICE_URL", () -> "http://127.0.0.1:9");
+        registry.add("AI_SERVICE_URL", () -> "http://127.0.0.1:9");
         registry.add("jwt.secret", () -> "LocalDevOnlyChangeMe_NeedAtLeast32Bytes!!");
         registry.add("cors.allowed-origins", () -> "http://localhost:4200");
     }

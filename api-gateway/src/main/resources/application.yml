@@ -14,7 +14,7 @@ spring:
             - id: planning-service
               uri: ${PLANNING_SERVICE_URL:http://localhost:8082}
               predicates:
-                - Path=/api/v1/tasks/**,/api/v1/task-categories/**,/api/v1/planning/**,/api/v1/events/**
+                - Path=/api/v1/tasks/**,/api/v1/task-categories/**,/api/v1/planning/**,/api/v1/events/**,/api/v1/dashboard/**
             - id: wellness-service
               uri: ${WELLNESS_SERVICE_URL:http://localhost:8083}
               predicates:
@@ -23,6 +23,10 @@ spring:
               uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8084}
               predicates:
                 - Path=/api/v1/reminders/**,/api/v1/notifications/**
+            - id: ai-service
+              uri: ${AI_SERVICE_URL:http://localhost:8090}
+              predicates:
+                - Path=/api/v1/ai/**
 
 server:
   port: ${GATEWAY_PORT:8080}
