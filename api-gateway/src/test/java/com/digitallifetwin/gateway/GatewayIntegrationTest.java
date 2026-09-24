@@ -239,10 +239,67 @@ class GatewayIntegrationTest {
             RecordedRequest recorded = take(aiServer);
             assertEquals("/api/v1/ai/chat", recorded.getPath());
         }
+
+        @Test
+        void routesAiLifestyleRisk() throws InterruptedException {
+            enqueueJson(aiServer, 200, "{\"riskLevel\":\"LOW\"}");
+            webTestClient.post().uri("/api/v1/ai/lifestyle-risk")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtFactory.validToken())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue("{\"averageStress\":3}")
+                    .exchange()
+                    .expectStatus().isOk();
+            assertEquals("/api/v1/ai/lifestyle-risk", take(aiServer).getPath());
+        }
+
+        @Test
+        void routesAiRecommendations() throws InterruptedException {
+            enqueueJson(aiServer, 200, "{\"recommendations\":[]}");
+            webTestClient.post().uri("/api/v1/ai/recommendations")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtFactory.validToken())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue("{\"hydrationMl\":900}")
+                    .exchange()
+                    .expectStatus().isOk();
+            assertEquals("/api/v1/ai/recommendations", take(aiServer).getPath());
+        }
+
+        @Test
+        void routesAiTaskDuration() throws InterruptedException {
+            enqueueJson(aiServer, 200, "{\"predictedDurationMinutes\":55}");
+            webTestClient.post().uri("/api/v1/ai/task-duration")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtFactory.validToken())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue("{\"userEstimateMinutes\":60}")
+                    .exchange()
+                    .expectStatus().isOk();
+            assertEquals("/api/v1/ai/task-duration", take(aiServer).getPath());
+        }
+
+        @Test
+        void routesAiSleepRisk() throws InterruptedException {
+            enqueueJson(aiServer, 200, "{\"riskLevel\":\"LOW\"}");
+            webTestClient.post().uri("/api/v1/ai/sleep-risk")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtFactory.validToken())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue("{\"age\":24}")
+                    .exchange()
+                    .expectStatus().isOk();
+            assertEquals("/api/v1/ai/sleep-risk", take(aiServer).getPath());
+        }
     }
 
     @Nested
     class Security {
+
+        @Test
+        void protectedAiChatWithoutJwtReturns401() {
+            webTestClient.post().uri("/api/v1/ai/chat")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue("{\"question\":\"Hello\"}")
+                    .exchange()
+                    .expectStatus().isUnauthorized();
+        }
 
         @Test
         void publicLoginWithoutJwt() {
