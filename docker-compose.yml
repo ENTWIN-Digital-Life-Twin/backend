@@ -19,8 +19,6 @@ services:
     networks:
       - dlt-net
 
-  # Edge entry point. Downstream services must join `dlt-net` and use these Docker DNS names.
-  # Local non-Docker defaults remain localhost in application.yml / .env.example.
   api-gateway:
     build:
       context: .
@@ -113,41 +111,9 @@ services:
     networks:
       - dlt-net
 
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: dlt-prometheus
-    volumes:
-      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - dlt_prometheus_data:/prometheus
-    ports:
-      - "9090:9090"
-    depends_on:
-      - auth-service
-      - planning-service
-      - wellness-service
-    networks:
-      - dlt-net
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: dlt-grafana
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
-    volumes:
-      - dlt_grafana_data:/var/lib/grafana
-    ports:
-      - "3000:3000"
-    depends_on:
-      - prometheus
-    networks:
-      - dlt-net
-
 networks:
   dlt-net:
     driver: bridge
 
 volumes:
   dlt_postgres_data:
-  dlt_prometheus_data:
-  dlt_grafana_data:
