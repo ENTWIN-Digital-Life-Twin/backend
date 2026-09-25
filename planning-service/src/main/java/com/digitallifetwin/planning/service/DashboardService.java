@@ -1,5 +1,8 @@
 package com.digitallifetwin.planning.service;
 
+import com.digitallifetwin.planning.client.PlanningAiClient;
+import com.digitallifetwin.planning.client.TaskDurationAiRequest;
+import com.digitallifetwin.planning.client.TaskDurationAiResponse;
 import com.digitallifetwin.planning.config.PlanningProperties;
 import com.digitallifetwin.planning.dto.response.DailyPlanSummaryResponse;
 import com.digitallifetwin.planning.dto.response.DashboardStatsResponse;
@@ -21,6 +24,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -31,11 +35,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class DashboardService {
 
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
+    private static final int BASELINE_AI_CONFIDENCE = 70;
 
     private final TaskRepository taskRepository;
     private final CalendarEventRepository eventRepository;
     private final DailyPlanService dailyPlanService;
     private final PlanningProperties planningProperties;
+    private final PlanningAiClient planningAiClient;
 
     @Transactional(readOnly = true)
     public DashboardStatsResponse getStats(UUID userId) {
@@ -52,19 +58,31 @@ public class DashboardService {
                 .filter(task -> task.getStatus() == TaskStatus.COMPLETED)
                 .mapToInt(this::trackedDuration)
                 .sum();
+        int breaksTaken = focusMinutes / 120;
         List<Task> priorityTasks = todayTasks.stream()
                 .filter(task -> task.getPriority() == TaskPriority.HIGH || task.getPriority() == TaskPriority.URGENT)
                 .toList();
+        int goalsMetPercent = productivity(priorityTasks);
+        int freeMinutes = plan.freeMinutes();
+        int eveningFree = Math.min(freeMinutes, 150);
+        int lunchFree = Math.min(freeMinutes, 45);
 
         return new DashboardStatsResponse(
                 productivity,
                 productivityChange,
                 completed,
                 todayTasks.size(),
+                formatDuration(focusMinutes),
                 focusMinutes,
                 plan.occupiedMinutes(),
-                plan.freeMinutes(),
-                productivity(priorityTasks),
+                freeMinutes,
+                breaksTaken,
+                goalsMetPercent,
+                goalsMetPercent,
+                aiConfidence(todayTasks, productivity),
+                formatDuration(freeMinutes),
+                formatDuration(eveningFree),
+                formatDuration(lunchFree),
                 plan.overloaded()
         );
     }
@@ -85,7 +103,7 @@ public class DashboardService {
             timeline.add(new TimelineEventResponse(
                     time.format(TIME_FORMAT),
                     task.getTitle(),
-                    task.getDescription() != null ? task.getDescription() : "",
+                    task.getDescription() != null ? task.getDescription() : "Task",
                     "work"
             ));
         }
@@ -95,7 +113,7 @@ public class DashboardService {
             timeline.add(new TimelineEventResponse(
                     time.format(TIME_FORMAT),
                     event.getTitle(),
-                    event.getDescription() != null ? event.getDescription() : "",
+                    event.getDescription() != null ? event.getDescription() : "Event",
                     timelineType(event.getEventType())
             ));
         }
@@ -119,12 +137,17 @@ public class DashboardService {
 
         LocalDateTime start = LocalDateTime.ofInstant(event.getStartDateTime(), zone);
         LocalDateTime end = LocalDateTime.ofInstant(event.getEndDateTime(), zone);
+        String location = event.getLocationLabel() != null ? event.getLocationLabel() : "TBD";
+        boolean online = location.toLowerCase(Locale.ROOT).contains("online");
+        String eventType = event.getEventType() != null ? event.getEventType().name() : null;
         return new UpcomingEventResponse(
                 event.getId(),
                 start.format(TIME_FORMAT) + " - " + end.format(TIME_FORMAT),
                 event.getTitle(),
-                event.getLocationLabel(),
-                event.getEventType().name()
+                location,
+                online,
+                parseParticipants(event.getDescription()),
+                eventType
         );
     }
 
@@ -154,6 +177,35 @@ public class DashboardService {
         return new WeeklyProductivityResponse(labels, productivity, tasksCompleted, tasksTotal, focusMinutes);
     }
 
+    private int aiConfidence(List<Task> todayTasks, int productivityPercent) {
+        Task sample = todayTasks.stream()
+                .filter(task -> task.getStatus() != TaskStatus.COMPLETED && task.getStatus() != TaskStatus.CANCELLED)
+                .findFirst()
+                .orElseGet(() -> todayTasks.isEmpty() ? null : todayTasks.getFirst());
+        if (sample == null) {
+            return productivityPercent;
+        }
+        TaskDurationAiRequest request = new TaskDurationAiRequest(
+                null,
+                sample.getComplexityLevel() != null ? sample.getComplexityLevel().name() : null,
+                sample.getEnergyRequired() != null ? sample.getEnergyRequired().name() : null,
+                sample.getPlannedDurationMinutes(),
+                sample.getActualDurationMinutes() != null && sample.getActualDurationMinutes() > 0
+                        ? sample.getActualDurationMinutes()
+                        : null
+        );
+        return planningAiClient.estimateDuration(request)
+                .map(this::confidenceFromAi)
+                .orElse(productivityPercent);
+    }
+
+    private int confidenceFromAi(TaskDurationAiResponse response) {
+        if (response.confidence() != null) {
+            return (int) Math.round(Math.max(0, Math.min(100, response.confidence() * 100)));
+        }
+        return BASELINE_AI_CONFIDENCE;
+    }
+
     private List<Task> tasksForDate(UUID userId, LocalDate date, ZoneId zone) {
         return taskRepository.findByUserIdAndDueDateBetween(
                 userId,
@@ -175,6 +227,32 @@ public class DashboardService {
             return task.getActualDurationMinutes();
         }
         return task.getPlannedDurationMinutes() != null ? task.getPlannedDurationMinutes() : 0;
+    }
+
+    private List<String> parseParticipants(String description) {
+        List<String> participants = new ArrayList<>();
+        if (description == null || !description.contains("participants:")) {
+            return participants;
+        }
+        String[] parts = description.split("participants:", 2);
+        if (parts.length < 2) {
+            return participants;
+        }
+        for (String name : parts[1].split(",")) {
+            String trimmed = name.trim();
+            if (!trimmed.isEmpty()) {
+                participants.add(trimmed);
+            }
+        }
+        return participants;
+    }
+
+    private String formatDuration(long minutes) {
+        long safe = Math.max(0, minutes);
+        if (safe < 60) {
+            return safe + "m";
+        }
+        return (safe / 60) + "h " + (safe % 60) + "m";
     }
 
     private String timelineType(EventType eventType) {

@@ -160,8 +160,11 @@ class PlanningFlowIntegrationTest {
                 .andExpect(jsonPath("$.tasksCompleted").value(0))
                 .andExpect(jsonPath("$.tasksTotal").value(0))
                 .andExpect(jsonPath("$.focusMinutes").exists())
+                .andExpect(jsonPath("$.focusTime").exists())
                 .andExpect(jsonPath("$.occupiedMinutes").exists())
                 .andExpect(jsonPath("$.freeMinutes").exists())
+                .andExpect(jsonPath("$.freeTimeTotal").exists())
+                .andExpect(jsonPath("$.aiConfidence").exists())
                 .andExpect(jsonPath("$.overloaded").exists());
 
         mockMvc.perform(get("/api/v1/dashboard/timeline").header("Authorization", auth))
@@ -195,6 +198,8 @@ class PlanningFlowIntegrationTest {
                 .andExpect(jsonPath("$.title").value("Client call"))
                 .andExpect(jsonPath("$.id").exists())
                 .andExpect(jsonPath("$.time").exists())
+                .andExpect(jsonPath("$.isOnline").exists())
+                .andExpect(jsonPath("$.participants").isArray())
                 .andExpect(jsonPath("$.eventType").value("APPOINTMENT"));
 
         mockMvc.perform(get("/api/v1/dashboard/timeline").header("Authorization", auth))

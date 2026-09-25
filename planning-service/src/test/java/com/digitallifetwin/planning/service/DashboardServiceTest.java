@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
+import com.digitallifetwin.planning.client.PlanningAiClient;
 import com.digitallifetwin.planning.config.PlanningProperties;
 import com.digitallifetwin.planning.dto.response.DailyPlanResponse;
 import com.digitallifetwin.planning.dto.response.DailyPlanSummaryResponse;
@@ -18,6 +19,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,6 +36,8 @@ class DashboardServiceTest {
     private CalendarEventRepository eventRepository;
     @Mock
     private DailyPlanService dailyPlanService;
+    @Mock
+    private PlanningAiClient planningAiClient;
 
     private DashboardService dashboardService;
     private UUID userId;
@@ -43,7 +47,8 @@ class DashboardServiceTest {
         userId = UUID.randomUUID();
         PlanningProperties properties = new PlanningProperties(
                 "Africa/Casablanca", LocalTime.of(8, 0), LocalTime.of(23, 0), 0.9);
-        dashboardService = new DashboardService(taskRepository, eventRepository, dailyPlanService, properties);
+        dashboardService = new DashboardService(
+                taskRepository, eventRepository, dailyPlanService, properties, planningAiClient);
     }
 
     @Test
@@ -60,6 +65,7 @@ class DashboardServiceTest {
                         List.of(),
                         new DailyPlanSummaryResponse(2, 1, 105, 30, 120, 780, 0, false)
                 ));
+        when(planningAiClient.estimateDuration(any())).thenReturn(Optional.empty());
 
         DashboardStatsResponse stats = dashboardService.getStats(userId);
 
@@ -68,9 +74,13 @@ class DashboardServiceTest {
         assertThat(stats.productivityPercent()).isEqualTo(50);
         assertThat(stats.productivityChangePercent()).isEqualTo(-50);
         assertThat(stats.priorityGoalsMetPercent()).isEqualTo(50);
+        assertThat(stats.goalsMetPercent()).isEqualTo(50);
         assertThat(stats.focusMinutes()).isEqualTo(40);
+        assertThat(stats.focusTime()).isEqualTo("40m");
         assertThat(stats.occupiedMinutes()).isEqualTo(120);
         assertThat(stats.freeMinutes()).isEqualTo(780);
+        assertThat(stats.freeTimeTotal()).isEqualTo("13h 0m");
+        assertThat(stats.aiConfidence()).isEqualTo(50);
         assertThat(stats.overloaded()).isFalse();
     }
 

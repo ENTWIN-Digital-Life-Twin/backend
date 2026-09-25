@@ -1,4 +1,14 @@
 package com.digitallifetwin.ai.dto.response;
 
-public record ChatResponse(String reply, String engine) {
+import com.fasterxml.jackson.annotation.JsonInclude;
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public record ChatResponse(
+        String answer,
+        String engine,
+        String provider,
+        String model,
+        String proposedAction,
+        String disclaimer
+) {
 }

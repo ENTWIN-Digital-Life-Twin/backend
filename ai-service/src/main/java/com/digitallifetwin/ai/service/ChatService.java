@@ -19,6 +19,9 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ChatService {
 
+    private static final String DISCLAIMER =
+            "This assistant uses your logged ENTWIN data. It is not a medical or clinical diagnosis.";
+
     private final DownstreamClient downstreamClient;
     private final RuleEngineService ruleEngine;
 
@@ -50,10 +53,9 @@ public class ChatService {
             return riskReply(rawToken);
         }
 
-        return new ChatResponse(
+        return answer(
                 "I can talk about your sleep, hydration, mood, stress, activity, tasks or overall "
-                        + "balance — try asking \"How is my sleep this week?\" or \"Am I overloaded today?\".",
-                RuleEngineService.ENGINE_NAME);
+                        + "balance — try asking \"How is my sleep this week?\" or \"Am I overloaded today?\".");
     }
 
     private ChatResponse sleepReply(String rawToken) {
@@ -66,9 +68,7 @@ public class ChatService {
         String verdict = minutes < RuleEngineService.LOW_SLEEP_MINUTES
                 ? "That's below the 8h target — try shifting bedtime earlier tonight."
                 : "That's a solid average — keep it consistent.";
-        return new ChatResponse(
-                String.format(Locale.ROOT, "You've averaged %.1fh of sleep this week. %s", hours, verdict),
-                RuleEngineService.ENGINE_NAME);
+        return answer(String.format(Locale.ROOT, "You've averaged %.1fh of sleep this week. %s", hours, verdict));
     }
 
     private ChatResponse hydrationReply(String rawToken) {
@@ -80,9 +80,8 @@ public class ChatService {
         String verdict = summary.get().averageHydrationMl() < RuleEngineService.LOW_HYDRATION_ML
                 ? "That's under your target — try drinking a glass of water every couple of hours."
                 : "You're close to or above target — nice work.";
-        return new ChatResponse(
-                String.format(Locale.ROOT, "You've averaged %.1f L of water per day this week. %s", liters, verdict),
-                RuleEngineService.ENGINE_NAME);
+        return answer(String.format(
+                Locale.ROOT, "You've averaged %.1f L of water per day this week. %s", liters, verdict));
     }
 
     private ChatResponse tasksReply(String rawToken) {
@@ -91,12 +90,13 @@ public class ChatService {
             return fallback("I couldn't reach the planning service to check your tasks right now.");
         }
         PlanningDashboardStats s = stats.get();
-        return new ChatResponse(
-                String.format(Locale.ROOT,
-                        "You've completed %d of %d tasks today (%d%% productivity).%s",
-                        s.tasksCompleted(), s.tasksTotal(), s.productivityPercent(),
-                        s.overloaded() ? " Your schedule looks overloaded — consider deferring something." : ""),
-                RuleEngineService.ENGINE_NAME);
+        return answer(String.format(
+                Locale.ROOT,
+                "You've completed %d of %d tasks today (%d%% productivity).%s",
+                s.tasksCompleted(),
+                s.tasksTotal(),
+                s.productivityPercent(),
+                s.overloaded() ? " Your schedule looks overloaded — consider deferring something." : ""));
     }
 
     private ChatResponse productivityReply(String rawToken) {
@@ -108,11 +108,12 @@ public class ChatService {
         String trend = s.productivityChangePercent() >= 0
                 ? "up " + s.productivityChangePercent() + "% versus your recent average"
                 : "down " + Math.abs(s.productivityChangePercent()) + "% versus your recent average";
-        return new ChatResponse(
-                String.format(Locale.ROOT,
-                        "Productivity today is %d%%, %s, with %d minutes of focus time logged.",
-                        s.productivityPercent(), trend, s.focusMinutes()),
-                RuleEngineService.ENGINE_NAME);
+        return answer(String.format(
+                Locale.ROOT,
+                "Productivity today is %d%%, %s, with %d minutes of focus time logged.",
+                s.productivityPercent(),
+                trend,
+                s.focusMinutes()));
     }
 
     private ChatResponse stressReply(String rawToken) {
@@ -124,9 +125,7 @@ public class ChatService {
         String verdict = stress >= RuleEngineService.HIGH_STRESS_LEVEL
                 ? "That's on the high side — a short breathing break between tasks can help."
                 : "That's a manageable level — keep monitoring it.";
-        return new ChatResponse(
-                String.format(Locale.ROOT, "Your average stress level this week is %.1f/10. %s", stress, verdict),
-                RuleEngineService.ENGINE_NAME);
+        return answer(String.format(Locale.ROOT, "Your average stress level this week is %.1f/10. %s", stress, verdict));
     }
 
     private ChatResponse moodReply(String rawToken) {
@@ -138,9 +137,7 @@ public class ChatService {
         String verdict = mood <= RuleEngineService.LOW_MOOD_LEVEL
                 ? "It's been a bit low — a short walk or catching up with a friend might help lift it."
                 : "It's holding up well this week.";
-        return new ChatResponse(
-                String.format(Locale.ROOT, "Your average mood this week is %.1f/10. %s", mood, verdict),
-                RuleEngineService.ENGINE_NAME);
+        return answer(String.format(Locale.ROOT, "Your average mood this week is %.1f/10. %s", mood, verdict));
     }
 
     private ChatResponse activityReply(String rawToken) {
@@ -152,9 +149,7 @@ public class ChatService {
         String verdict = minutes < RuleEngineService.LOW_WEEKLY_ACTIVITY_MINUTES
                 ? "That's below the 150 min/week guideline — a few brisk walks would help close the gap."
                 : "You're close to or above the weekly activity guideline — great consistency.";
-        return new ChatResponse(
-                String.format(Locale.ROOT, "You've logged %d minutes of activity this week. %s", minutes, verdict),
-                RuleEngineService.ENGINE_NAME);
+        return answer(String.format(Locale.ROOT, "You've logged %d minutes of activity this week. %s", minutes, verdict));
     }
 
     private ChatResponse riskReply(String rawToken) {
@@ -164,16 +159,19 @@ public class ChatService {
         }
         WellnessWeeklySummary s = summary.get();
         RuleEngineService.Inputs inputs = new RuleEngineService.Inputs(
-                s.averageSleepMinutes(), s.averageHydrationMl(),
+                s.averageSleepMinutes(),
+                s.averageHydrationMl(),
                 s.totalWorkoutMinutes() == null ? null : s.totalWorkoutMinutes().doubleValue(),
-                s.averageStress(), s.averageFatigue(), s.averageMood(), s.averageDailySteps());
+                s.averageStress(),
+                s.averageFatigue(),
+                s.averageMood(),
+                s.averageDailySteps());
         RuleEngineService.RiskAssessment risk = ruleEngine.assessRisk(inputs);
         String detail = risk.factors().isEmpty()
                 ? "no red flags in sleep, hydration, activity, stress or mood."
                 : "flags in: " + String.join(", ", risk.factors()).toLowerCase(Locale.ROOT).replace('_', ' ') + ".";
-        return new ChatResponse(
-                String.format(Locale.ROOT, "Your overall lifestyle risk this week is %s — %s", risk.riskLevel(), detail),
-                RuleEngineService.ENGINE_NAME);
+        return answer(String.format(
+                Locale.ROOT, "Your overall lifestyle risk this week is %s — %s", risk.riskLevel(), detail));
     }
 
     private Optional<WellnessWeeklySummary> weekly(String rawToken) {
@@ -185,7 +183,17 @@ public class ChatService {
     }
 
     private ChatResponse fallback(String message) {
-        return new ChatResponse(message, RuleEngineService.ENGINE_NAME);
+        return answer(message);
+    }
+
+    private ChatResponse answer(String text) {
+        return new ChatResponse(
+                text,
+                RuleEngineService.ENGINE_NAME,
+                "rules",
+                RuleEngineService.ENGINE_NAME,
+                null,
+                DISCLAIMER);
     }
 
     private boolean containsAny(String haystack, String... needles) {

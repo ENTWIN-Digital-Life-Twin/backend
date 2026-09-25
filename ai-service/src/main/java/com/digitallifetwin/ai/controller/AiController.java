@@ -71,6 +71,6 @@ public class AiController {
     @PostMapping("/chat")
     @Operation(summary = "Ask the assistant a question about your own lifestyle data")
     public ResponseEntity<ChatResponse> chat(@Valid @RequestBody ChatRequest request) {
-        return ResponseEntity.ok(chatService.reply(SecurityUtils.currentRawToken(), request.message()));
+        return ResponseEntity.ok(chatService.reply(SecurityUtils.currentRawToken(), request.question()));
     }
 }

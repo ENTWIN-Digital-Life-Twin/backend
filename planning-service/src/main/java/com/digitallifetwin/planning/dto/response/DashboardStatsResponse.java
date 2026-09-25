@@ -1,14 +1,21 @@
 package com.digitallifetwin.planning.dto.response;
 
 public record DashboardStatsResponse(
-        int productivityPercent,
-        int productivityChangePercent,
-        int tasksCompleted,
-        int tasksTotal,
-        int focusMinutes,
-        int occupiedMinutes,
-        int freeMinutes,
-        int priorityGoalsMetPercent,
-        boolean overloaded
+        Integer productivityPercent,
+        Integer productivityChangePercent,
+        Integer tasksCompleted,
+        Integer tasksTotal,
+        String focusTime,
+        Integer focusMinutes,
+        Integer occupiedMinutes,
+        Integer freeMinutes,
+        Integer breaksTaken,
+        Integer goalsMetPercent,
+        Integer priorityGoalsMetPercent,
+        Integer aiConfidence,
+        String freeTimeTotal,
+        String freeTimeEvening,
+        String freeTimeLunch,
+        Boolean overloaded
 ) {
 }
