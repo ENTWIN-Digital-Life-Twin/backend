@@ -43,12 +43,17 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       probes:
         enabled: true
       show-details: never
+    prometheus:
+      access: unrestricted
+  metrics:
+    tags:
+      application: ${spring.application.name}
   info:
     env:
       enabled: true
