@@ -37,13 +37,7 @@ public class CorsConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         origins.forEach(configuration::addAllowedOriginPattern);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of(
-                "Authorization",
-                "Content-Type",
-                "Accept",
-                "Origin",
-                "X-Correlation-Id"
-        ));
+        configuration.setAllowedHeaders(List.of("*"));
         configuration.setExposedHeaders(List.of("Authorization", "X-Correlation-Id"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);

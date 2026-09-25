@@ -8,6 +8,7 @@ COPY planning-service/pom.xml planning-service/pom.xml
 COPY wellness-service/pom.xml wellness-service/pom.xml
 COPY notification-service/pom.xml notification-service/pom.xml
 COPY api-gateway/pom.xml api-gateway/pom.xml
+COPY ai-service/pom.xml ai-service/pom.xml
 
 COPY common/src common/src
 COPY wellness-service/src wellness-service/src

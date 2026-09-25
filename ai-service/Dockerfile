@@ -11,16 +11,15 @@ COPY api-gateway/pom.xml api-gateway/pom.xml
 COPY ai-service/pom.xml ai-service/pom.xml
 
 COPY common/src common/src
-COPY api-gateway/src api-gateway/src
+COPY ai-service/src ai-service/src
 
-RUN mvn -pl api-gateway -am package -DskipTests -B
+RUN mvn -pl ai-service -am package -DskipTests -B
 
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-
 RUN addgroup -S app && adduser -S app -G app
-COPY --from=build /workspace/api-gateway/target/api-gateway-*.jar /app/app.jar
+COPY --from=build /workspace/ai-service/target/ai-service-*.jar /app/app.jar
 USER app
 
-EXPOSE 8080
+EXPOSE 8090
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
