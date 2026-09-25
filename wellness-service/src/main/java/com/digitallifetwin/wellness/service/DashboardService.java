@@ -1,5 +1,11 @@
 package com.digitallifetwin.wellness.service;
 
+import com.digitallifetwin.wellness.client.LifestyleRiskAiRequest;
+import com.digitallifetwin.wellness.client.LifestyleRiskAiResponse;
+import com.digitallifetwin.wellness.client.RecommendationAiRequest;
+import com.digitallifetwin.wellness.client.RecommendationAiResponse;
+import com.digitallifetwin.wellness.client.WellnessAiClient;
+import com.digitallifetwin.wellness.config.WellnessProperties;
 import com.digitallifetwin.wellness.dto.response.DailyWellnessSummaryResponse;
 import com.digitallifetwin.wellness.dto.response.DashboardWellnessResponse;
 import com.digitallifetwin.wellness.dto.response.WeeklyWellnessResponse;
@@ -22,35 +28,80 @@ public class DashboardService {
     private static final int MEAL_TARGET = 3;
 
     private final WellnessSummaryService wellnessSummaryService;
+    private final WellnessProperties wellnessProperties;
+    private final WellnessAiClient wellnessAiClient;
 
     @Transactional(readOnly = true)
     public DashboardWellnessResponse getDashboardMetrics(UUID userId) {
-        DailyWellnessSummaryResponse summary = wellnessSummaryService.daily(userId, LocalDate.now());
+        LocalDate today = LocalDate.now(wellnessProperties.zoneId());
+        DailyWellnessSummaryResponse summary = wellnessSummaryService.daily(userId, today);
+        WeeklyWellnessSummaryResponse weekly = wellnessSummaryService.weekly(userId, today.minusDays(6));
 
-        return DashboardWellnessResponse.builder()
-                .sleep(metric(formatMinutes(summary.sleep().totalMinutes()), percentage(summary.sleep().totalMinutes(), SLEEP_TARGET_MINUTES)))
-                .hydration(metric(formatLiters(summary.hydration().totalMl()), clamp(summary.hydration().goalPercentage())))
-                .activity(metric(summary.activity().activeMinutes() + " min", percentage(summary.activity().activeMinutes(), ACTIVITY_TARGET_MINUTES)))
-                .nutrition(metric(summary.nutrition().mealCount() + " meals", percentage(summary.nutrition().mealCount(), MEAL_TARGET)))
-                .mood(metric(formatMood(summary.wellbeing().averageMood()), moodPercentage(summary.wellbeing().averageMood())))
-                .build();
+        return new DashboardWellnessResponse(
+                metric(formatMinutes(summary.sleep().totalMinutes()), percentage(summary.sleep().totalMinutes(), SLEEP_TARGET_MINUTES)),
+                metric(formatLiters(summary.hydration().totalMl()), clamp(summary.hydration().goalPercentage())),
+                metric(summary.activity().activeMinutes() + " min", percentage(summary.activity().activeMinutes(), ACTIVITY_TARGET_MINUTES)),
+                metric(summary.nutrition().mealCount() + " meals", percentage(summary.nutrition().mealCount(), MEAL_TARGET)),
+                metric(formatMood(summary.wellbeing().averageMood()), moodPercentage(summary.wellbeing().averageMood())),
+                lifestyleRisk(weekly),
+                recommendationMessages(weekly)
+        );
     }
 
     @Transactional(readOnly = true)
     public WeeklyWellnessResponse getWeeklyMetrics(UUID userId) {
-        WeeklyWellnessSummaryResponse summary = wellnessSummaryService.weekly(userId, LocalDate.now().minusDays(6));
+        LocalDate start = LocalDate.now(wellnessProperties.zoneId()).minusDays(6);
+        WeeklyWellnessSummaryResponse summary = wellnessSummaryService.weekly(userId, start);
         List<DailyWellnessSummaryResponse> days = summary.days();
+        return new WeeklyWellnessResponse(
+                days.stream().map(day -> day.date().getDayOfWeek().name().substring(0, 3)).toList(),
+                days.stream().map(day -> percentage(day.sleep().totalMinutes(), SLEEP_TARGET_MINUTES)).toList(),
+                days.stream().map(day -> percentage(day.activity().activeMinutes(), ACTIVITY_TARGET_MINUTES)).toList(),
+                days.stream().map(day -> percentage(day.nutrition().mealCount(), MEAL_TARGET)).toList()
+        );
+    }
 
-        return WeeklyWellnessResponse.builder()
-                .labels(days.stream().map(day -> day.date().getDayOfWeek().name().substring(0, 3)).toList())
-                .sleep(days.stream().map(day -> percentage(day.sleep().totalMinutes(), SLEEP_TARGET_MINUTES)).toList())
-                .activity(days.stream().map(day -> percentage(day.activity().activeMinutes(), ACTIVITY_TARGET_MINUTES)).toList())
-                .nutrition(days.stream().map(day -> percentage(day.nutrition().mealCount(), MEAL_TARGET)).toList())
-                .build();
+    private String lifestyleRisk(WeeklyWellnessSummaryResponse weekly) {
+        return wellnessAiClient.lifestyleRisk(toLifestyleRequest(weekly))
+                .map(LifestyleRiskAiResponse::riskLevel)
+                .orElse(null);
+    }
+
+    private List<String> recommendationMessages(WeeklyWellnessSummaryResponse weekly) {
+        return wellnessAiClient.recommendations(toRecommendationRequest(weekly))
+                .map(RecommendationAiResponse::recommendations)
+                .orElse(List.of())
+                .stream()
+                .map(RecommendationAiResponse.RecommendationAiItem::message)
+                .toList();
+    }
+
+    private LifestyleRiskAiRequest toLifestyleRequest(WeeklyWellnessSummaryResponse weekly) {
+        return new LifestyleRiskAiRequest(
+                weekly.averageSleepMinutes(),
+                weekly.averageHydrationMl(),
+                weekly.totalWorkoutMinutes() == null ? null : weekly.totalWorkoutMinutes().doubleValue(),
+                weekly.averageStress(),
+                weekly.averageFatigue(),
+                weekly.averageMood(),
+                weekly.averageDailySteps()
+        );
+    }
+
+    private RecommendationAiRequest toRecommendationRequest(WeeklyWellnessSummaryResponse weekly) {
+        return new RecommendationAiRequest(
+                weekly.averageSleepMinutes(),
+                weekly.averageHydrationMl(),
+                weekly.averageStress(),
+                weekly.averageFatigue(),
+                weekly.totalWorkoutMinutes() == null ? null : weekly.totalWorkoutMinutes().doubleValue(),
+                weekly.averageMood(),
+                weekly.averageDailySteps()
+        );
     }
 
     private DashboardWellnessResponse.MetricData metric(String value, int level) {
-        return DashboardWellnessResponse.MetricData.builder().value(value).level(level).build();
+        return new DashboardWellnessResponse.MetricData(value, level);
     }
 
     private String formatMinutes(Integer totalMinutes) {

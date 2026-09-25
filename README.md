@@ -2,7 +2,31 @@
 
 Backend for **ENTWIN**, a university PFE project: an intelligent life-management platform (planning, wellness, notifications, and later AI recommendations).
 
-This repository is a Maven multi-module Spring Boot backend. Current milestones: **Authentication**, **Planning MVP**, and **Wellness MVP**. Notification and gateway remain placeholders.
+This repository is a Maven multi-module Spring Boot backend. Current milestones: **Authentication**, **Planning MVP**, **Wellness MVP**, **Notification MVP**, and **API Gateway MVP**.
+
+## Architecture
+
+```text
+                       ┌──────────────────┐
+                       │     Angular      │
+                       └────────┬─────────┘
+                                │
+                                ▼
+                       ┌──────────────────┐
+                       │   API Gateway    │
+                       │      :8080       │
+                       └────────┬─────────┘
+                                │
+        ┌───────────┬───────────┼───────────┬───────────┐
+        │           │           │           │           │
+        ▼           ▼           ▼           ▼           ▼
+    Auth :8081  Planning   Wellness  Notification   (future)
+                 :8082      :8083       :8084      AI / Traffic
+```
+
+**Intended client path:** Frontend → API Gateway → microservices.
+
+Direct service ports remain available for local Swagger and debugging only. Production should expose the Gateway publicly and keep services on the internal network.
 
 ## Prerequisites
 
@@ -21,8 +45,8 @@ digital-life-twin-backend/
 ├── auth-service/            # fully implemented
 ├── planning-service/        # fully implemented (MVP)
 ├── wellness-service/        # fully implemented (MVP)
-├── notification-service/    # placeholder
-└── api-gateway/             # placeholder
+├── notification-service/    # fully implemented (MVP)
+└── api-gateway/             # Spring Cloud Gateway MVP
 ```
 
 | Module | Status |
@@ -30,8 +54,8 @@ digital-life-twin-backend/
 | `auth-service` | Implemented: register, login, JWT, refresh rotation, logout, profile, password change |
 | `planning-service` | Implemented: tasks, events, categories, conflicts, daily free-time planning |
 | `wellness-service` | Implemented: sleep, hydration, meals, workouts, mood, health records, goals, daily/weekly summaries |
-| `notification-service` | Empty Spring Boot module |
-| `api-gateway` | Empty Spring Boot module |
+| `notification-service` | Implemented: reminders, in-app notifications, read/unread, DAILY/WEEKLY recurrence, scheduled processing |
+| `api-gateway` | Implemented: routing, edge JWT, CORS, correlation ID, auth rate limit, clean errors |
 | `common` | Shared library placeholder |
 
 ## Start PostgreSQL
@@ -39,18 +63,19 @@ digital-life-twin-backend/
 From the repository root:
 
 ```bash
-docker compose up -d
+docker compose up -d dlt-postgres
 ```
 
 This starts `dlt-postgres` on port `5432` with a persistent volume.
 
-On **first** container init, `docker/postgres/init-databases.sh` also creates `dlt_planning` and `dlt_wellness`.
+On **first** container init, `docker/postgres/init-databases.sh` also creates `dlt_planning`, `dlt_wellness`, and `dlt_notification`.
 
 If the volume already existed before those databases were added, create them once:
 
 ```bash
 docker exec -it dlt-postgres psql -U dlt -d dlt_auth -c "CREATE DATABASE dlt_planning;"
 docker exec -it dlt-postgres psql -U dlt -d dlt_auth -c "CREATE DATABASE dlt_wellness;"
+docker exec -it dlt-postgres psql -U dlt -d dlt_auth -c "CREATE DATABASE dlt_notification;"
 ```
 
 Default local credentials (override via environment or a private `.env` file):
@@ -58,6 +83,7 @@ Default local credentials (override via environment or a private `.env` file):
 - Auth database: `dlt_auth`
 - Planning database: `dlt_planning`
 - Wellness database: `dlt_wellness`
+- Notification database: `dlt_notification`
 - Username: `dlt`
 - Password: `dlt`
 
@@ -78,10 +104,18 @@ Do not commit `.env`.
 | `DB_NAME` | Database name | `dlt_auth` |
 | `DB_USERNAME` | Database user | `dlt` |
 | `DB_PASSWORD` | Database password | `changeme` |
-| `JWT_SECRET` | HMAC secret, at least 32 characters | long random string |
+| `JWT_SECRET` | HMAC secret, at least 32 characters (shared by all JWT validators) | long random string |
 | `JWT_ACCESS_EXPIRATION` | Access token lifetime in seconds | `3600` |
 | `JWT_REFRESH_EXPIRATION` | Refresh token lifetime in seconds | `604800` |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated allowed frontend origins | `http://localhost:4200` |
+| `GATEWAY_PORT` | API Gateway listen port | `8080` |
+| `AUTH_SERVICE_URL` | Downstream auth base URL | `http://localhost:8081` |
+| `PLANNING_SERVICE_URL` | Downstream planning base URL | `http://localhost:8082` |
+| `WELLNESS_SERVICE_URL` | Downstream wellness base URL | `http://localhost:8083` |
+| `NOTIFICATION_SERVICE_URL` | Downstream notification base URL | `http://localhost:8084` |
+| `AI_SERVICE_URL` | Downstream ENTWIN AI assistant | `http://localhost:8090` |
+| `GATEWAY_AUTH_RATE_LIMIT_REQUESTS` | Auth endpoint rate limit (per window) | `20` |
+| `GATEWAY_AUTH_RATE_LIMIT_WINDOW_SECONDS` | Auth rate-limit window | `60` |
 | `PLANNING_DB_NAME` | Planning service database | `dlt_planning` |
 | `PLANNING_DEFAULT_TIMEZONE` | Temporary default TZ until auth profile sync | `Africa/Casablanca` |
 | `PLANNING_DAY_START` | Usable day start (local) | `08:00` |
@@ -89,8 +123,101 @@ Do not commit `.env`.
 | `WELLNESS_DB_NAME` | Wellness service database | `dlt_wellness` |
 | `WELLNESS_DEFAULT_TIMEZONE` | Temporary default TZ until auth profile sync | `Africa/Casablanca` |
 | `WELLNESS_DEFAULT_WATER_GOAL_ML` | Fallback daily water goal (auth prefs not queried) | `2000` |
+| `NOTIFICATION_DB_NAME` | Notification service database | `dlt_notification` |
+| `NOTIFICATION_SCHEDULER_FIXED_DELAY_MS` | Delay between reminder processing runs | `60000` |
 
-`application.yml` includes local-development fallbacks so the service can start without a `.env` file. Override `JWT_SECRET` and database credentials before any shared or production use.
+`application.yml` includes local-development fallbacks so services can start without a `.env` file. Override `JWT_SECRET` and database credentials before any shared or production use.
+
+## API Gateway
+
+Gateway URL: **http://localhost:8080**
+
+Health: **http://localhost:8080/actuator/health**
+
+### Purpose
+
+Single external entry point for Angular. Preserves existing public API paths (no `/planning` prefix rewrite).
+
+### Routing
+
+| External path | Downstream |
+| --- | --- |
+| `/api/auth/**`, `/api/users/**` | `AUTH_SERVICE_URL` (default `http://localhost:8081`) |
+| `/api/v1/tasks/**`, `/api/v1/task-categories/**`, `/api/v1/planning/**`, `/api/v1/events/**`, `/api/v1/dashboard/**` | `PLANNING_SERVICE_URL` |
+| `/api/v1/wellness/**` | `WELLNESS_SERVICE_URL` |
+| `/api/v1/reminders/**`, `/api/v1/notifications/**` | `NOTIFICATION_SERVICE_URL` |
+| `/api/v1/ai/**` | `AI_SERVICE_URL` (default `http://localhost:8090`) |
+
+### JWT behavior (defense in depth)
+
+1. Gateway validates access-token signature, expiration, format, and `userId` claim.
+2. Gateway forwards `Authorization: Bearer …` unchanged.
+3. Downstream services validate the JWT again independently.
+
+Gateway does **not** query `dlt_auth` or any service database.
+
+**Known limitation:** a user disabled/blocked after token issuance may retain access until the access token expires.
+
+### Public vs protected (Gateway)
+
+Public:
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/refresh`
+- `GET /actuator/health`, `/actuator/info`
+- `OPTIONS /**` (CORS preflight)
+
+Everything else routed through the Gateway requires a valid Bearer access token (`401` otherwise). Logout and `/api/users/me/**` remain protected.
+
+### CORS
+
+Centralized at the Gateway via `CORS_ALLOWED_ORIGINS` (never `*` with credentials). Downstream service CORS configs are left in place for direct Swagger/dev access.
+
+### Correlation ID
+
+Header: `X-Correlation-Id`
+
+- Valid incoming value reused (max 64 chars, safe charset)
+- Otherwise generated UUID
+- Forwarded downstream and returned on the response
+- Included in Gateway access/error logs
+
+### Rate limiting
+
+In-memory limiter on `POST /api/auth/login|register|refresh` (`GATEWAY_AUTH_RATE_LIMIT_*`).
+
+**Limitation:** per Gateway instance only — replace with distributed rate limiting for multi-instance production.
+
+### Run Gateway locally
+
+Start Auth, Planning, Wellness, and Notification first, then:
+
+```powershell
+.\mvnw.cmd -pl api-gateway -am spring-boot:run
+```
+
+### Manual smoke test through Gateway only
+
+```text
+POST http://localhost:8080/api/auth/login
+Authorization: Bearer <accessToken> on subsequent calls
+
+GET  http://localhost:8080/api/users/me
+GET  http://localhost:8080/api/v1/tasks
+GET  http://localhost:8080/api/v1/planning/daily?date=2026-09-05
+GET  http://localhost:8080/api/v1/wellness/summary/daily?date=2026-09-05
+GET  http://localhost:8080/api/v1/notifications
+GET  http://localhost:8080/api/v1/notifications/unread-count
+```
+
+### Docker
+
+```bash
+docker compose up -d dlt-postgres api-gateway
+```
+
+Compose sets Docker DNS URLs such as `http://auth-service:8081`. Backend service containers must join the `dlt-net` network and use those hostnames. Direct localhost URLs remain the default for non-Docker development.
 
 ## Run auth-service
 
@@ -114,7 +241,7 @@ cd auth-service
 ..\mvnw.cmd spring-boot:run
 ```
 
-PostgreSQL must already be running (`docker compose up -d` from the repository root).
+PostgreSQL must already be running (`docker compose up -d dlt-postgres` from the repository root).
 
 The service listens on **http://localhost:8081** by default.
 
@@ -231,9 +358,44 @@ Hydration totals use beverage contribution factors: WATER 100%, TEA 80%, COFFEE 
 | `GET` | `/api/v1/wellness/summary/daily?date=YYYY-MM-DD` |
 | `GET` | `/api/v1/wellness/summary/weekly?startDate=YYYY-MM-DD` |
 
+## Run notification-service
+
+PostgreSQL must include `dlt_notification`. Use the same `JWT_SECRET` as auth-service.
+
+```powershell
+.\mvnw.cmd -pl notification-service -am spring-boot:run
+```
+
+Notification listens on **http://localhost:8084**.
+
+- Swagger UI: http://localhost:8084/swagger-ui.html
+- Health: http://localhost:8084/actuator/health
+
+Notification validates JWTs with the shared secret and trusts claims. It does **not** query `auth_db`, `dlt_planning`, or `dlt_wellness`.
+
+Reminder execution is scheduler-driven and creates **IN_APP** notifications only for this MVP. EMAIL/PUSH are enum values only. Recurrence is DAILY (+1 day) or WEEKLY (+7 days) in UTC. Soft-deleted reminders and notifications are excluded from APIs and scheduling.
+
+Duplicate execution is prevented by locking the reminder row and updating `nextTriggerAt` (or disabling one-time reminders) in the same transaction as the SENT notification.
+
+Notification templates were skipped for this MVP; reminder title/message are stored and delivered as-is.
+
+### Notification API (authenticated)
+
+| Method | Path |
+| --- | --- |
+| `POST/GET` | `/api/v1/reminders` |
+| `GET/PUT/DELETE` | `/api/v1/reminders/{id}` |
+| `PATCH` | `/api/v1/reminders/{id}/enabled` |
+| `GET` | `/api/v1/notifications` |
+| `GET` | `/api/v1/notifications/{id}` |
+| `PATCH` | `/api/v1/notifications/{id}/read` |
+| `PATCH` | `/api/v1/notifications/read-all` |
+| `GET` | `/api/v1/notifications/unread-count` |
+| `DELETE` | `/api/v1/notifications/{id}` |
+
 ## Run tests
 
-Unit tests use JUnit 5 and Mockito. Integration tests use Testcontainers PostgreSQL, so Docker must be running.
+Unit tests use JUnit 5 and Mockito. Service integration tests use Testcontainers PostgreSQL, so Docker must be running. Gateway tests use MockWebServer (no live microservices required).
 
 ```bash
 # whole backend
@@ -248,8 +410,14 @@ Unit tests use JUnit 5 and Mockito. Integration tests use Testcontainers Postgre
 # wellness-service only
 ./mvnw -pl wellness-service -am test
 
-# all implemented services
-./mvnw -pl auth-service,planning-service,wellness-service -am test
+# notification-service only
+./mvnw -pl notification-service -am test
+
+# api-gateway only
+./mvnw -pl api-gateway -am test
+
+# all implemented modules
+./mvnw -pl auth-service,planning-service,wellness-service,notification-service,api-gateway -am test
 ```
 
 On Windows PowerShell use `.\mvnw.cmd` instead of `./mvnw`. Integration tests need Docker Desktop running; they are skipped automatically if Docker is unavailable.
@@ -257,22 +425,23 @@ On Windows PowerShell use `.\mvnw.cmd` instead of `./mvnw`. Integration tests ne
 ## Build
 
 ```bash
-./mvnw -pl auth-service,planning-service,wellness-service -am package
+./mvnw -pl auth-service,planning-service,wellness-service,notification-service,api-gateway -am package
 ```
 
 Auth-service image (build context is the repository root):
 
 ```bash
 docker build -f auth-service/Dockerfile -t entwin-auth-service .
+docker build -f api-gateway/Dockerfile -t entwin-api-gateway .
 ```
 
 ## Remaining TODOs
 
 - Integrate user timezone/availability from auth-service into planning and wellness
 - Sync daily water goal from auth-service preferences into wellness (event/API)
-- Notification business logic
-- Introduce Spring Cloud Gateway in `api-gateway`
-- Add the Python FastAPI AI service and RabbitMQ integration
+- EMAIL/PUSH delivery, RabbitMQ reminder events from Planning/Wellness/AI
+- Distributed rate limiting / token introspection or short-lived access tokens
+- Gateway Swagger aggregation
 - Add GitHub Actions, AWS EC2 deployment, Prometheus, and Grafana
 - Email verification and password-reset flows
 - User preference management API

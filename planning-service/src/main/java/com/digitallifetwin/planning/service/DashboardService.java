@@ -1,203 +1,216 @@
 package com.digitallifetwin.planning.service;
 
+import com.digitallifetwin.planning.client.PlanningAiClient;
+import com.digitallifetwin.planning.client.TaskDurationAiRequest;
+import com.digitallifetwin.planning.client.TaskDurationAiResponse;
+import com.digitallifetwin.planning.config.PlanningProperties;
 import com.digitallifetwin.planning.dto.response.DashboardStatsResponse;
 import com.digitallifetwin.planning.dto.response.TimelineEventResponse;
 import com.digitallifetwin.planning.dto.response.UpcomingEventResponse;
 import com.digitallifetwin.planning.entity.CalendarEvent;
 import com.digitallifetwin.planning.entity.Task;
+import com.digitallifetwin.planning.enums.TaskPriority;
 import com.digitallifetwin.planning.enums.TaskStatus;
 import com.digitallifetwin.planning.repository.CalendarEventRepository;
 import com.digitallifetwin.planning.repository.TaskRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-
-import java.time.*;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
 public class DashboardService {
 
+    private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
+    private static final int BASELINE_AI_CONFIDENCE = 70;
+
     private final TaskRepository taskRepository;
     private final CalendarEventRepository eventRepository;
+    private final PlanningProperties planningProperties;
+    private final PlanningAiClient planningAiClient;
 
-    /**
-     * Get dashboard statistics for today
-     */
+    @Transactional(readOnly = true)
     public DashboardStatsResponse getStats(UUID userId) {
-        LocalDate today = LocalDate.now();
-        Instant startOfDay = today.atStartOfDay(ZoneId.systemDefault()).toInstant();
-        Instant endOfDay = today.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+        ZoneId zone = planningProperties.zoneId();
+        LocalDate today = LocalDate.now(zone);
+        Instant startOfDay = today.atStartOfDay(zone).toInstant();
+        Instant endOfDay = today.plusDays(1).atStartOfDay(zone).toInstant();
 
-        // Get today's tasks
         List<Task> todayTasks = taskRepository.findByUserIdAndDueDateBetween(userId, startOfDay, endOfDay);
-        
         int totalTasks = todayTasks.size();
         int completedTasks = (int) todayTasks.stream()
                 .filter(task -> task.getStatus() == TaskStatus.COMPLETED)
                 .count();
-        
         int productivityPercent = totalTasks > 0 ? (completedTasks * 100) / totalTasks : 0;
-        
-        // Calculate focus time (sum of completed task durations)
-        long totalMinutes = todayTasks.stream()
+
+        long focusMinutes = todayTasks.stream()
                 .filter(task -> task.getStatus() == TaskStatus.COMPLETED)
-                .mapToLong(task -> 30) // Assume 30 min per task, or use actual duration if available
+                .mapToLong(this::taskMinutes)
                 .sum();
-        
-        String focusTime = formatDuration(totalMinutes);
-        
-        // Calculate breaks (assume 1 break per 2 hours of work)
-        int breaksTaken = (int) (totalMinutes / 120);
-        
-        // Calculate goals met (tasks with high priority completed)
-        long highPriorityTasks = todayTasks.stream()
-                .filter(task -> task.getPriority() != null)
+        int breaksTaken = (int) (focusMinutes / 120);
+
+        long goalTasks = todayTasks.stream().filter(this::isGoalTask).count();
+        long goalsCompleted = todayTasks.stream()
+                .filter(task -> task.getStatus() == TaskStatus.COMPLETED && isGoalTask(task))
                 .count();
-        long highPriorityCompleted = todayTasks.stream()
-                .filter(task -> task.getStatus() == TaskStatus.COMPLETED && task.getPriority() != null)
-                .count();
-        
-        int goalsMetPercent = highPriorityTasks > 0 ? (int) ((highPriorityCompleted * 100) / highPriorityTasks) : 0;
-        
-        // AI confidence (placeholder - would come from AI service)
-        int aiConfidence = 82;
-        
-        // Calculate free time
-        long workMinutes = totalMinutes + (breaksTaken * 15);
-        long freeMinutes = (16 * 60) - workMinutes; // Assume 16-hour day
-        long eveningFree = Math.min(freeMinutes, 150); // Max 2.5 hours evening
-        long lunchFree = 45; // Standard lunch break
-        
-        return DashboardStatsResponse.builder()
-                .productivityPercent(productivityPercent)
-                .tasksCompleted(completedTasks)
-                .tasksTotal(totalTasks)
-                .focusTime(focusTime)
-                .breaksTaken(breaksTaken)
-                .goalsMetPercent(goalsMetPercent)
-                .aiConfidence(aiConfidence)
-                .freeTimeTotal(formatDuration(freeMinutes))
-                .freeTimeEvening(formatDuration(eveningFree))
-                .freeTimeLunch(formatDuration(lunchFree))
-                .build();
+        int goalsMetPercent = goalTasks > 0 ? (int) ((goalsCompleted * 100) / goalTasks) : 0;
+
+        long usableMinutes = Math.max(
+                0,
+                Duration.between(planningProperties.dayStart(), planningProperties.dayEnd()).toMinutes());
+        long workMinutes = focusMinutes + (breaksTaken * 15L);
+        long freeMinutes = Math.max(0, usableMinutes - workMinutes);
+        long eveningFree = Math.min(freeMinutes, 150);
+        long lunchFree = Math.min(freeMinutes, 45);
+
+        return new DashboardStatsResponse(
+                productivityPercent,
+                completedTasks,
+                totalTasks,
+                formatDuration(focusMinutes),
+                breaksTaken,
+                goalsMetPercent,
+                aiConfidence(todayTasks, productivityPercent),
+                formatDuration(freeMinutes),
+                formatDuration(eveningFree),
+                formatDuration(lunchFree)
+        );
     }
 
-    /**
-     * Get today's timeline from tasks and events
-     */
+    @Transactional(readOnly = true)
     public List<TimelineEventResponse> getTimeline(UUID userId) {
-        LocalDate today = LocalDate.now();
-        Instant startOfDay = today.atStartOfDay(ZoneId.systemDefault()).toInstant();
-        Instant endOfDay = today.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+        ZoneId zone = planningProperties.zoneId();
+        LocalDate today = LocalDate.now(zone);
+        Instant startOfDay = today.atStartOfDay(zone).toInstant();
+        Instant endOfDay = today.plusDays(1).atStartOfDay(zone).toInstant();
 
         List<TimelineEventResponse> timeline = new ArrayList<>();
-        
-        // Get today's tasks
-        List<Task> todayTasks = taskRepository.findByUserIdAndDueDateBetween(userId, startOfDay, endOfDay);
-        
-        // Get today's events
-        List<CalendarEvent> todayEvents = eventRepository.findByUserIdAndStartTimeBetween(userId, startOfDay, endOfDay);
-        
-        // Convert tasks to timeline events
-        for (Task task : todayTasks) {
-            LocalTime time = task.getDeadline() != null 
-                ? LocalDateTime.ofInstant(task.getDeadline(), ZoneId.systemDefault()).toLocalTime()
-                : LocalTime.of(9, 0); // Default to 9 AM
-            
-            timeline.add(TimelineEventResponse.builder()
-                    .time(time.format(DateTimeFormatter.ofPattern("HH:mm")))
-                    .title(task.getTitle())
-                    .detail(task.getDescription() != null ? task.getDescription() : "Task")
-                    .type("work")
-                    .build());
+        for (Task task : taskRepository.findByUserIdAndDueDateBetween(userId, startOfDay, endOfDay)) {
+            Instant when = task.getStartDateTime() != null ? task.getStartDateTime() : task.getDeadline();
+            LocalTime time = when != null
+                    ? LocalDateTime.ofInstant(when, zone).toLocalTime()
+                    : planningProperties.dayStart();
+            timeline.add(new TimelineEventResponse(
+                    time.format(TIME),
+                    task.getTitle(),
+                    task.getDescription() != null ? task.getDescription() : "Task",
+                    "work"
+            ));
         }
-        
-        // Convert calendar events to timeline events
-        for (CalendarEvent event : todayEvents) {
-            LocalTime time = LocalDateTime.ofInstant(event.getStartDateTime(), ZoneId.systemDefault()).toLocalTime();
-            
-            String type = event.getEventType() != null ? event.getEventType().name().toLowerCase() : "meeting";
-            
-            timeline.add(TimelineEventResponse.builder()
-                    .time(time.format(DateTimeFormatter.ofPattern("HH:mm")))
-                    .title(event.getTitle())
-                    .detail(event.getDescription() != null ? event.getDescription() : "Event")
-                    .type(type)
-                    .build());
+        for (CalendarEvent event : eventRepository.findByUserIdAndStartTimeBetween(userId, startOfDay, endOfDay)) {
+            LocalTime time = LocalDateTime.ofInstant(event.getStartDateTime(), zone).toLocalTime();
+            String type = event.getEventType() != null
+                    ? event.getEventType().name().toLowerCase(Locale.ROOT)
+                    : "meeting";
+            timeline.add(new TimelineEventResponse(
+                    time.format(TIME),
+                    event.getTitle(),
+                    event.getDescription() != null ? event.getDescription() : "Event",
+                    type
+            ));
         }
-        
-        // Sort by time
-        timeline.sort((a, b) -> a.getTime().compareTo(b.getTime()));
-        
+        timeline.sort(Comparator.comparing(TimelineEventResponse::time));
         return timeline;
     }
 
-    /**
-     * Get the next upcoming event
-     */
+    @Transactional(readOnly = true)
     public UpcomingEventResponse getUpcomingEvent(UUID userId) {
+        ZoneId zone = planningProperties.zoneId();
         Instant now = Instant.now();
-        Instant endOfDay = LocalDate.now().plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
-        
-        // Find next event
-        List<CalendarEvent> upcomingEvents = eventRepository.findByUserIdAndStartTimeBetween(userId, now, endOfDay);
-        
-        if (upcomingEvents.isEmpty()) {
+        Instant endOfDay = LocalDate.now(zone).plusDays(1).atStartOfDay(zone).toInstant();
+        List<CalendarEvent> upcoming = eventRepository.findByUserIdAndStartTimeBetween(userId, now, endOfDay);
+        if (upcoming.isEmpty()) {
             return null;
         }
-        
-        // Get the first upcoming event
-        CalendarEvent event = upcomingEvents.stream()
-                .min((a, b) -> a.getStartDateTime().compareTo(b.getStartDateTime()))
-                .orElse(null);
-        
-        if (event == null) {
-            return null;
-        }
-        
-        LocalDateTime startTime = LocalDateTime.ofInstant(event.getStartDateTime(), ZoneId.systemDefault());
-        LocalDateTime endTime = event.getEndDateTime() != null 
-            ? LocalDateTime.ofInstant(event.getEndDateTime(), ZoneId.systemDefault())
-            : startTime.plusHours(1);
-        
-        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
-        String timeRange = startTime.format(timeFormatter) + " - " + endTime.format(timeFormatter);
-        
-        // Extract participants from description or use placeholder
-        List<String> participants = new ArrayList<>();
-        if (event.getDescription() != null && event.getDescription().contains("participants:")) {
-            // Parse participants from description
-            String[] parts = event.getDescription().split("participants:");
-            if (parts.length > 1) {
-                String[] names = parts[1].split(",");
-                for (String name : names) {
-                    participants.add(name.trim());
-                }
-            }
-        }
-        
-        return UpcomingEventResponse.builder()
-                .time(timeRange)
-                .title(event.getTitle())
-                .location(event.getLocationLabel() != null ? event.getLocationLabel() : "TBD")
-                .isOnline(event.getLocationLabel() != null && event.getLocationLabel().toLowerCase().contains("online"))
-                .participants(participants)
-                .build();
+        CalendarEvent event = upcoming.getFirst();
+        LocalDateTime startTime = LocalDateTime.ofInstant(event.getStartDateTime(), zone);
+        LocalDateTime endTime = LocalDateTime.ofInstant(event.getEndDateTime(), zone);
+        String location = event.getLocationLabel() != null ? event.getLocationLabel() : "TBD";
+        boolean online = location.toLowerCase(Locale.ROOT).contains("online");
+        return new UpcomingEventResponse(
+                startTime.format(TIME) + " - " + endTime.format(TIME),
+                event.getTitle(),
+                location,
+                online,
+                parseParticipants(event.getDescription())
+        );
     }
 
-    /**
-     * Format duration in minutes to "Xh Ym" format
-     */
-    private String formatDuration(long minutes) {
-        if (minutes < 60) {
-            return minutes + "m";
+    private int aiConfidence(List<Task> todayTasks, int productivityPercent) {
+        Task sample = todayTasks.stream()
+                .filter(task -> task.getStatus() != TaskStatus.COMPLETED && task.getStatus() != TaskStatus.CANCELLED)
+                .findFirst()
+                .orElseGet(() -> todayTasks.isEmpty() ? null : todayTasks.getFirst());
+        if (sample == null) {
+            return productivityPercent;
         }
-        long hours = minutes / 60;
-        long mins = minutes % 60;
-        return hours + "h " + mins + "m";
+        TaskDurationAiRequest request = new TaskDurationAiRequest(
+                null,
+                sample.getComplexityLevel() != null ? sample.getComplexityLevel().name() : null,
+                sample.getEnergyRequired() != null ? sample.getEnergyRequired().name() : null,
+                sample.getPlannedDurationMinutes(),
+                sample.getActualDurationMinutes() != null && sample.getActualDurationMinutes() > 0
+                        ? sample.getActualDurationMinutes()
+                        : null
+        );
+        return planningAiClient.estimateDuration(request)
+                .map(this::confidenceFromAi)
+                .orElse(productivityPercent);
+    }
+
+    private int confidenceFromAi(TaskDurationAiResponse response) {
+        if (response.confidence() != null) {
+            return (int) Math.round(Math.max(0, Math.min(100, response.confidence() * 100)));
+        }
+        return BASELINE_AI_CONFIDENCE;
+    }
+
+    private boolean isGoalTask(Task task) {
+        return task.getPriority() == TaskPriority.HIGH || task.getPriority() == TaskPriority.URGENT;
+    }
+
+    private long taskMinutes(Task task) {
+        if (task.getActualDurationMinutes() != null && task.getActualDurationMinutes() > 0) {
+            return task.getActualDurationMinutes();
+        }
+        return task.getPlannedDurationMinutes() != null ? task.getPlannedDurationMinutes() : 0;
+    }
+
+    private List<String> parseParticipants(String description) {
+        List<String> participants = new ArrayList<>();
+        if (description == null || !description.contains("participants:")) {
+            return participants;
+        }
+        String[] parts = description.split("participants:", 2);
+        if (parts.length < 2) {
+            return participants;
+        }
+        for (String name : parts[1].split(",")) {
+            String trimmed = name.trim();
+            if (!trimmed.isEmpty()) {
+                participants.add(trimmed);
+            }
+        }
+        return participants;
+    }
+
+    private String formatDuration(long minutes) {
+        long safe = Math.max(0, minutes);
+        if (safe < 60) {
+            return safe + "m";
+        }
+        return (safe / 60) + "h " + (safe % 60) + "m";
     }
 }

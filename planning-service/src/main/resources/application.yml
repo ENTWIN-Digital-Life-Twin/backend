@@ -34,6 +34,11 @@ planning:
   day-end: ${PLANNING_DAY_END:23:00}
   overload-threshold-ratio: ${PLANNING_OVERLOAD_THRESHOLD:0.9}
 
+ai:
+  service-url: ${AI_SERVICE_URL:http://localhost:8090}
+  connect-timeout-ms: ${AI_CONNECT_TIMEOUT_MS:2000}
+  read-timeout-ms: ${AI_READ_TIMEOUT_MS:5000}
+
 management:
   endpoints:
     web:

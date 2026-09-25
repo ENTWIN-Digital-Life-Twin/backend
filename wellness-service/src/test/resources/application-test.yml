@@ -5,6 +5,11 @@ wellness:
   default-timezone: Africa/Casablanca
   default-water-goal-ml: 2000
 
+ai:
+  service-url: http://127.0.0.1:9
+  connect-timeout-ms: 200
+  read-timeout-ms: 200
+
 spring:
   jpa:
     hibernate:
