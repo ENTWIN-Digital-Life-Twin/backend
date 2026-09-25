@@ -12,6 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.digitallifetwin.planning.support.TestJwtFactory;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -135,6 +137,70 @@ class PlanningFlowIntegrationTest {
         mockMvc.perform(get("/api/v1/tasks")
                         .header("Authorization", "Bearer not-a-jwt"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void dashboard_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(get("/api/v1/dashboard/stats")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/dashboard/timeline")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/dashboard/upcoming")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/dashboard/weekly")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void dashboard_emptyUpcoming_returns204_andOtherSectionsOk() throws Exception {
+        String auth = TestJwtFactory.bearer(UUID.randomUUID());
+
+        mockMvc.perform(get("/api/v1/dashboard/upcoming").header("Authorization", auth))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/v1/dashboard/stats").header("Authorization", auth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.productivityPercent").value(0))
+                .andExpect(jsonPath("$.tasksCompleted").value(0))
+                .andExpect(jsonPath("$.tasksTotal").value(0))
+                .andExpect(jsonPath("$.focusMinutes").exists())
+                .andExpect(jsonPath("$.occupiedMinutes").exists())
+                .andExpect(jsonPath("$.freeMinutes").exists())
+                .andExpect(jsonPath("$.overloaded").exists());
+
+        mockMvc.perform(get("/api/v1/dashboard/timeline").header("Authorization", auth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+
+        mockMvc.perform(get("/api/v1/dashboard/weekly").header("Authorization", auth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.labels.length()").value(7))
+                .andExpect(jsonPath("$.productivity.length()").value(7))
+                .andExpect(jsonPath("$.tasksCompleted.length()").value(7))
+                .andExpect(jsonPath("$.tasksTotal.length()").value(7))
+                .andExpect(jsonPath("$.focusMinutes.length()").value(7));
+    }
+
+    @Test
+    void dashboard_upcomingEvent_mapsAppointmentTimelineAsMeeting() throws Exception {
+        UUID userId = UUID.randomUUID();
+        String auth = TestJwtFactory.bearer(userId);
+        Instant start = Instant.now().plus(Duration.ofMinutes(20));
+        Instant end = start.plus(Duration.ofMinutes(40));
+
+        mockMvc.perform(post("/api/v1/events")
+                        .header("Authorization", auth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(eventJson("Client call", start.toString(), end.toString(), "APPOINTMENT")))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/v1/dashboard/upcoming").header("Authorization", auth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Client call"))
+                .andExpect(jsonPath("$.id").exists())
+                .andExpect(jsonPath("$.time").exists())
+                .andExpect(jsonPath("$.eventType").value("APPOINTMENT"));
+
+        mockMvc.perform(get("/api/v1/dashboard/timeline").header("Authorization", auth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].title").value("Client call"))
+                .andExpect(jsonPath("$[0].type").value("meeting"));
     }
 
     @Test
@@ -358,15 +424,19 @@ class PlanningFlowIntegrationTest {
     }
 
     private String eventJson(String title, String start, String end) {
+        return eventJson(title, start, end, "WORK");
+    }
+
+    private String eventJson(String title, String start, String end, String eventType) {
         return """
                 {
                   "title": "%s",
                   "startDateTime": "%s",
                   "endDateTime": "%s",
                   "allDay": false,
-                  "eventType": "WORK",
+                  "eventType": "%s",
                   "recurring": false
                 }
-                """.formatted(title, start, end);
+                """.formatted(title, start, end, eventType);
     }
 }

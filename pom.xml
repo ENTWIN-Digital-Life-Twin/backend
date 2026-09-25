@@ -25,6 +25,7 @@
         <module>wellness-service</module>
         <module>notification-service</module>
         <module>api-gateway</module>
+        <module>ai-service</module>
     </modules>
 
     <properties>

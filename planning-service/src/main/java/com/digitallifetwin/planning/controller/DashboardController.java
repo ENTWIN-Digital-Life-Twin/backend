@@ -3,6 +3,7 @@ package com.digitallifetwin.planning.controller;
 import com.digitallifetwin.planning.dto.response.DashboardStatsResponse;
 import com.digitallifetwin.planning.dto.response.TimelineEventResponse;
 import com.digitallifetwin.planning.dto.response.UpcomingEventResponse;
+import com.digitallifetwin.planning.dto.response.WeeklyProductivityResponse;
 import com.digitallifetwin.planning.security.SecurityUtils;
 import com.digitallifetwin.planning.service.DashboardService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,5 +43,11 @@ public class DashboardController {
             return ResponseEntity.noContent().build();
         }
         return ResponseEntity.ok(event);
+    }
+
+    @GetMapping("/weekly")
+    @Operation(summary = "Get productivity metrics for the last seven days")
+    public ResponseEntity<WeeklyProductivityResponse> getWeeklyProductivity() {
+        return ResponseEntity.ok(dashboardService.getWeeklyProductivity(SecurityUtils.currentUserId()));
     }
 }

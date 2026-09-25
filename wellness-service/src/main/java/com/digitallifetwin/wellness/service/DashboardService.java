@@ -100,6 +100,10 @@ public class DashboardService {
         );
     }
 
+    private LocalDate today() {
+        return LocalDate.now(wellnessProperties.zoneId());
+    }
+
     private DashboardWellnessResponse.MetricData metric(String value, int level) {
         return new DashboardWellnessResponse.MetricData(value, level);
     }

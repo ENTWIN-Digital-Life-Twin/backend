@@ -42,6 +42,34 @@ class WellnessFlowIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Test
+    void dashboard_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(get("/api/v1/wellness/dashboard")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/wellness/weekly")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void dashboard_returnsTodayMetricsAndWeeklySeries() throws Exception {
+        String auth = TestJwtFactory.bearer(UUID.randomUUID());
+
+        mockMvc.perform(get("/api/v1/wellness/dashboard").header("Authorization", auth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sleep.value").exists())
+                .andExpect(jsonPath("$.sleep.level").exists())
+                .andExpect(jsonPath("$.hydration.value").exists())
+                .andExpect(jsonPath("$.hydration.level").exists())
+                .andExpect(jsonPath("$.activity.value").exists())
+                .andExpect(jsonPath("$.nutrition.value").exists())
+                .andExpect(jsonPath("$.mood.value").exists());
+
+        mockMvc.perform(get("/api/v1/wellness/weekly").header("Authorization", auth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.labels.length()").value(7))
+                .andExpect(jsonPath("$.sleep.length()").value(7))
+                .andExpect(jsonPath("$.activity.length()").value(7))
+                .andExpect(jsonPath("$.nutrition.length()").value(7));
+    }
+
+    @Test
     void createSleep_unauthenticated_returns401() throws Exception {
         mockMvc.perform(post("/api/v1/wellness/sleep")
                         .contentType(MediaType.APPLICATION_JSON)
