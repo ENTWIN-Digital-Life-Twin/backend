@@ -42,10 +42,6 @@ services:
     networks:
       - dlt-net
 
-networks:
-  dlt-net:
-    driver: bridge
-
   auth-service:
     build:
       context: .
@@ -67,6 +63,8 @@ networks:
     depends_on:
       dlt-postgres:
         condition: service_healthy
+    networks:
+      - dlt-net
 
   planning-service:
     build:
@@ -89,6 +87,8 @@ networks:
     depends_on:
       dlt-postgres:
         condition: service_healthy
+    networks:
+      - dlt-net
 
   wellness-service:
     build:
@@ -110,6 +110,12 @@ networks:
     depends_on:
       dlt-postgres:
         condition: service_healthy
+    networks:
+      - dlt-net
+
+networks:
+  dlt-net:
+    driver: bridge
 
 volumes:
   dlt_postgres_data:
