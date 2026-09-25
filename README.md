@@ -125,8 +125,60 @@ Do not commit `.env`.
 | `WELLNESS_DEFAULT_WATER_GOAL_ML` | Fallback daily water goal (auth prefs not queried) | `2000` |
 | `NOTIFICATION_DB_NAME` | Notification service database | `dlt_notification` |
 | `NOTIFICATION_SCHEDULER_FIXED_DELAY_MS` | Delay between reminder processing runs | `60000` |
+| `SMTP_HOST` | SMTP relay host (empty disables reset emails) | `smtp-relay.brevo.com` |
+| `SMTP_PORT` | SMTP port (STARTTLS) | `587` |
+| `SMTP_USERNAME` | SMTP login (Brevo SMTP login) | *(your login)* |
+| `SMTP_PASSWORD` | SMTP password / API key | *(secret, never commit)* |
+| `MAIL_FROM` | Verified sender address | `noreply@example.com` |
+| `FRONTEND_URL` | Public frontend origin used in reset links | `http://localhost:4200` |
+| `AUTH_EXPOSE_RESET_TOKEN` | Return the raw reset token in the API (local only) | `true` locally, `false` in production |
+| `GOOGLE_CLIENT_ID` | Google Identity Services web client ID | *(empty disables Google login)* |
 
 `application.yml` includes local-development fallbacks so services can start without a `.env` file. Override `JWT_SECRET` and database credentials before any shared or production use.
+
+## Password reset email (Brevo SMTP)
+
+The forgot-password API already generates a hashed, expiring, single-use token. Auth-service sends the reset link with Spring Boot Mail when SMTP is configured.
+
+1. Copy `.env.example` to `.env` (never commit `.env`).
+2. Set Brevo SMTP values:
+
+```env
+SMTP_HOST=smtp-relay.brevo.com
+SMTP_PORT=587
+SMTP_USERNAME=
+SMTP_PASSWORD=
+MAIL_FROM=
+FRONTEND_URL=http://localhost:4200
+AUTH_EXPOSE_RESET_TOKEN=true
+```
+
+3. `MAIL_FROM` must be a sender address verified in Brevo.
+4. `FRONTEND_URL` must match the Angular origin. Reset links use `/reset-password?token=...`.
+5. Locally you can keep `AUTH_EXPOSE_RESET_TOKEN=true` so the API may also return the token for UI testing without mail.
+6. In any shared or production environment set `AUTH_EXPOSE_RESET_TOKEN=false`. The token is never returned; the user must open the email link.
+7. STARTTLS is enabled on port 587. Credentials are read only from environment variables.
+
+If SMTP is missing or sending fails, the API still returns the same generic message (no account enumeration, no SMTP details). Check auth-service logs for `Password reset issued` / `reset email was not sent`. Do not expect the raw token, SMTP password, or user password in those logs.
+
+## Google Sign-In
+
+Google is only an identity provider. After a verified Google ID token, auth-service issues the normal ENTWIN access JWT and refresh token.
+
+1. Create an OAuth 2.0 **Web application** client in Google Cloud Console.
+2. Authorized JavaScript origins must include the Angular origin (`http://localhost:4200` locally).
+3. Authorized redirect URIs are not required for the GIS popup ID-token flow.
+4. Set the same client ID in backend `GOOGLE_CLIENT_ID` and frontend `environment.googleClientId`.
+5. Leave `.env.example` empty. Put the real value only in local `.env` / `environment.ts`.
+
+`POST /api/auth/google` with `{ "credential": "<Google ID token>" }` is public, like login. Protected APIs still require an ENTWIN JWT.
+
+Account linking:
+
+- Match an existing `GOOGLE` identity by Google `sub` first (returning user).
+- Auto-link a local account only when the Google email is **verified** and Google is authoritative for it (`@gmail.com` / `@googlemail.com`, or a Workspace `hd` hosted-domain claim).
+- If the email matches an existing account but Google is not authoritative, the API returns **409** and does not take over the account. Sign in with password instead.
+- Unverified or missing Google email is rejected. No duplicate user is created.
 
 ## API Gateway
 
@@ -165,6 +217,9 @@ Public:
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `POST /api/auth/refresh`
+- `POST /api/auth/forgot-password`
+- `POST /api/auth/reset-password`
+- `POST /api/auth/contact`
 - `GET /actuator/health`, `/actuator/info`
 - `OPTIONS /**` (CORS preflight)
 
@@ -185,7 +240,7 @@ Header: `X-Correlation-Id`
 
 ### Rate limiting
 
-In-memory limiter on `POST /api/auth/login|register|refresh` (`GATEWAY_AUTH_RATE_LIMIT_*`).
+In-memory limiter on `POST /api/auth/login|register|refresh|forgot-password|reset-password|contact` (`GATEWAY_AUTH_RATE_LIMIT_*`).
 
 **Limitation:** per Gateway instance only — replace with distributed rate limiting for multi-instance production.
 
@@ -443,6 +498,6 @@ docker build -f api-gateway/Dockerfile -t entwin-api-gateway .
 - Distributed rate limiting / token introspection or short-lived access tokens
 - Gateway Swagger aggregation
 - Add GitHub Actions, AWS EC2 deployment, Prometheus, and Grafana
-- Email verification and password-reset flows
+- Email verification
 - User preference management API
 - AI schedule optimization, traffic, recurring occurrence expansion
