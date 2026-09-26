@@ -25,6 +25,7 @@ buildNumber.properties
 # Environment and secrets
 .env
 .env.local
+secrets/
 *.pem
 *.p12
 *.jks

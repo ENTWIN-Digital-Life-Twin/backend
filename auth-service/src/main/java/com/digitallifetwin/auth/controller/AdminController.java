@@ -1,6 +1,7 @@
 package com.digitallifetwin.auth.controller;
 
 import com.digitallifetwin.auth.dto.request.UpdateAccountStatusRequest;
+import com.digitallifetwin.auth.dto.request.UpdateUserRoleRequest;
 import com.digitallifetwin.auth.dto.response.AdminStatsResponse;
 import com.digitallifetwin.auth.dto.response.ContactMessageResponse;
 import com.digitallifetwin.auth.dto.response.UserProfileResponse;
@@ -15,6 +16,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -55,5 +57,19 @@ public class AdminController {
     public ResponseEntity<UserProfileResponse> updateStatus(
             @PathVariable UUID id, @Valid @RequestBody UpdateAccountStatusRequest request) {
         return ResponseEntity.ok(adminUserService.updateStatus(SecurityUtils.currentUserId(), id, request));
+    }
+
+    @PatchMapping("/users/{id}/role")
+    @Operation(summary = "Grant or revoke administrator access")
+    public ResponseEntity<UserProfileResponse> updateRole(
+            @PathVariable UUID id, @Valid @RequestBody UpdateUserRoleRequest request) {
+        return ResponseEntity.ok(adminUserService.updateRole(SecurityUtils.currentUserId(), id, request));
+    }
+
+    @DeleteMapping("/contacts/{id}")
+    @Operation(summary = "Delete a contact message")
+    public ResponseEntity<Void> deleteContact(@PathVariable UUID id) {
+        contactService.delete(id);
+        return ResponseEntity.noContent().build();
     }
 }

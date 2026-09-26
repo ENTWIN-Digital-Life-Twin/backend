@@ -1,12 +1,14 @@
 package com.digitallifetwin.auth.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.digitallifetwin.auth.dto.request.ContactRequest;
 import com.digitallifetwin.auth.entity.ContactMessage;
+import com.digitallifetwin.auth.exception.ResourceNotFoundException;
 import com.digitallifetwin.auth.repository.ContactMessageRepository;
 import java.time.Instant;
 import java.util.List;
@@ -61,5 +63,26 @@ class ContactServiceTest {
 
         assertThat(contactService.list()).hasSize(1);
         assertThat(contactService.list().getFirst().email()).isEqualTo("ada@example.com");
+    }
+
+    @Test
+    void delete_removesExistingMessage() {
+        UUID id = UUID.randomUUID();
+        ContactMessage message = new ContactMessage();
+        message.setId(id);
+        when(contactMessageRepository.findById(id)).thenReturn(java.util.Optional.of(message));
+
+        contactService.delete(id);
+
+        verify(contactMessageRepository).delete(message);
+    }
+
+    @Test
+    void delete_unknownId_throws() {
+        UUID id = UUID.randomUUID();
+        when(contactMessageRepository.findById(id)).thenReturn(java.util.Optional.empty());
+
+        assertThatThrownBy(() -> contactService.delete(id))
+                .isInstanceOf(ResourceNotFoundException.class);
     }
 }

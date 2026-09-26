@@ -5,7 +5,9 @@ import com.digitallifetwin.auth.dto.response.ContactMessageResponse;
 import com.digitallifetwin.auth.dto.response.MessageResponse;
 import com.digitallifetwin.auth.entity.ContactMessage;
 import com.digitallifetwin.auth.repository.ContactMessageRepository;
+import com.digitallifetwin.auth.exception.ResourceNotFoundException;
 import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -44,5 +46,12 @@ public class ContactService {
     @Transactional(readOnly = true)
     public long count() {
         return contactMessageRepository.count();
+    }
+
+    @Transactional
+    public void delete(UUID id) {
+        ContactMessage message = contactMessageRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Contact message not found"));
+        contactMessageRepository.delete(message);
     }
 }

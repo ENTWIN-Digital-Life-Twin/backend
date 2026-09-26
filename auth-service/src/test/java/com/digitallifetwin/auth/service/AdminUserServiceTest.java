@@ -6,12 +6,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.digitallifetwin.auth.dto.request.UpdateAccountStatusRequest;
+import com.digitallifetwin.auth.dto.request.UpdateUserRoleRequest;
 import com.digitallifetwin.auth.entity.Role;
 import com.digitallifetwin.auth.entity.User;
 import com.digitallifetwin.auth.enums.AccountStatus;
 import com.digitallifetwin.auth.enums.RoleName;
 import com.digitallifetwin.auth.mapper.UserMapper;
+import com.digitallifetwin.auth.repository.RoleRepository;
 import com.digitallifetwin.auth.repository.UserRepository;
+import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -29,6 +32,8 @@ class AdminUserServiceTest {
     @Mock
     private UserRepository userRepository;
     @Mock
+    private RoleRepository roleRepository;
+    @Mock
     private ContactService contactService;
     @Mock
     private RefreshTokenService refreshTokenService;
@@ -42,7 +47,8 @@ class AdminUserServiceTest {
 
     @BeforeEach
     void setUp() {
-        adminUserService = new AdminUserService(userRepository, contactService, userMapper, refreshTokenService);
+        adminUserService = new AdminUserService(
+                userRepository, roleRepository, contactService, userMapper, refreshTokenService);
         adminId = UUID.randomUUID();
         userId = UUID.randomUUID();
         Role role = new Role();
@@ -55,7 +61,7 @@ class AdminUserServiceTest {
         user.setAccountStatus(AccountStatus.ACTIVE);
         user.setPreferredLanguage("en");
         user.setTimezone("UTC");
-        user.setRoles(Set.of(role));
+        user.setRoles(new HashSet<>(Set.of(role)));
     }
 
     @Test
@@ -90,5 +96,54 @@ class AdminUserServiceTest {
         assertThat(stats.activeUsers()).isEqualTo(8);
         assertThat(stats.adminUsers()).isEqualTo(1);
         assertThat(stats.contactMessages()).isEqualTo(3);
+    }
+
+    @Test
+    void updateRole_rejectsSelf() {
+        assertThatThrownBy(() -> adminUserService.updateRole(
+                adminId, adminId, new UpdateUserRoleRequest(RoleName.USER)))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void updateRole_promotesUserToAdmin() {
+        Role adminRole = new Role();
+        adminRole.setName(RoleName.ADMIN);
+        when(userRepository.findByIdWithRoles(userId)).thenReturn(Optional.of(user));
+        when(roleRepository.findByName(RoleName.ADMIN)).thenReturn(Optional.of(adminRole));
+        when(userRepository.save(user)).thenReturn(user);
+
+        var response = adminUserService.updateRole(adminId, userId, new UpdateUserRoleRequest(RoleName.ADMIN));
+
+        assertThat(response.roles()).contains("ADMIN");
+    }
+
+    @Test
+    void updateRole_rejectsRemovingLastAdmin() {
+        Role adminRole = new Role();
+        adminRole.setName(RoleName.ADMIN);
+        user.setRoles(new HashSet<>(Set.of(adminRole)));
+        when(userRepository.findByIdWithRoles(userId)).thenReturn(Optional.of(user));
+        when(userRepository.countByRoleName(RoleName.ADMIN)).thenReturn(1L);
+
+        assertThatThrownBy(() -> adminUserService.updateRole(
+                adminId, userId, new UpdateUserRoleRequest(RoleName.USER)))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void updateRole_demotesAdminWhenOthersRemain() {
+        Role adminRole = new Role();
+        adminRole.setName(RoleName.ADMIN);
+        Role userRole = new Role();
+        userRole.setName(RoleName.USER);
+        user.setRoles(new HashSet<>(Set.of(adminRole, userRole)));
+        when(userRepository.findByIdWithRoles(userId)).thenReturn(Optional.of(user));
+        when(userRepository.countByRoleName(RoleName.ADMIN)).thenReturn(2L);
+        when(userRepository.save(user)).thenReturn(user);
+
+        var response = adminUserService.updateRole(adminId, userId, new UpdateUserRoleRequest(RoleName.USER));
+
+        assertThat(response.roles()).containsExactly("USER");
     }
 }

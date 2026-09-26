@@ -3,6 +3,7 @@ package com.digitallifetwin.auth.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -395,6 +396,52 @@ class AuthFlowIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"" + newRefreshToken + "\"}"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void adminPanel_rejectsUsersAndAllowsAdminsToChangeRoles() throws Exception {
+        String adminEmail = uniqueEmail("adminpanel");
+        String userToken = loginAndGetAccessToken(adminEmail, "StrongPassword123!");
+
+        mockMvc.perform(get("/api/users/admin/stats")
+                        .header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isForbidden());
+
+        String adminToken = grantAdminAndRelogin(adminEmail, "StrongPassword123!");
+        mockMvc.perform(get("/api/users/admin/stats")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalUsers").isNumber());
+
+        String memberEmail = uniqueEmail("member");
+        register(memberEmail, "StrongPassword123!");
+        User member = userRepository.findByEmailIgnoreCase(memberEmail).orElseThrow();
+
+        mockMvc.perform(patch("/api/users/admin/users/" + member.getId() + "/role")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\":\"ADMIN\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles[0]").value("ADMIN"));
+
+        mockMvc.perform(patch("/api/users/admin/users/" + member.getId() + "/status")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"accountStatus\":\"DISABLED\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accountStatus").value("DISABLED"));
+    }
+
+    private String grantAdminAndRelogin(String email, String password) throws Exception {
+        User user = userRepository.findByEmailIgnoreCaseWithRoles(email).orElseThrow();
+        user.getRoles().add(roleRepository.findByName(RoleName.ADMIN).orElseThrow());
+        userRepository.saveAndFlush(user);
+        MvcResult result = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginJson(email, password)))
+                .andExpect(status().isOk())
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString()).get("accessToken").asText();
     }
 
     private void setAccountStatus(String email, AccountStatus status) {
