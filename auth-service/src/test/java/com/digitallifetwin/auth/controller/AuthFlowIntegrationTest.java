@@ -161,7 +161,38 @@ class AuthFlowIntegrationTest {
                 .andExpect(jsonPath("$.tokenType").value("Bearer"))
                 .andExpect(jsonPath("$.expiresIn").value(3600))
                 .andExpect(jsonPath("$.user.email").value(email))
-                .andExpect(jsonPath("$.user.roles[0]").value("USER"));
+                .andExpect(jsonPath("$.user.roles[0]").value("USER"))
+                .andExpect(jsonPath("$.newDevice").value(false));
+    }
+
+    @Test
+    void login_secondDevice_setsNewDeviceTrue() throws Exception {
+        String email = uniqueEmail("device");
+        register(email, "StrongPassword123!");
+        String body = loginJson(email, "StrongPassword123!");
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Device-Id", "browser-one")
+                        .header("X-Device-Label", "Chrome")
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.newDevice").value(false));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Device-Id", "browser-one")
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.newDevice").value(false));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Device-Id", "browser-two")
+                        .header("X-Device-Label", "Firefox")
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.newDevice").value(true));
     }
 
     @Test

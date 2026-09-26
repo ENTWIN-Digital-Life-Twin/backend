@@ -23,6 +23,8 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
 
     long countByUserIdAndReminderIdAndDeletedFalse(UUID userId, UUID reminderId);
 
+    boolean existsByUserIdAndTitleAndDeletedFalse(UUID userId, String title);
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
             UPDATE Notification n

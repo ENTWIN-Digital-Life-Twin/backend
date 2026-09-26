@@ -4,11 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import com.digitallifetwin.notification.dto.request.CreateNotificationRequest;
+import com.digitallifetwin.notification.dto.response.BootstrapNotificationsResponse;
 import com.digitallifetwin.notification.dto.response.NotificationResponse;
 import com.digitallifetwin.notification.entity.Notification;
 import com.digitallifetwin.notification.enums.NotificationChannel;
 import com.digitallifetwin.notification.enums.NotificationStatus;
 import com.digitallifetwin.notification.enums.NotificationType;
+import com.digitallifetwin.notification.enums.ReminderSourceType;
 import com.digitallifetwin.notification.mapper.NotificationMapper;
 import com.digitallifetwin.notification.repository.NotificationRepository;
 import java.time.Instant;
@@ -68,6 +71,37 @@ class NotificationServiceTest {
 
         assertThat(response.status()).isEqualTo(NotificationStatus.READ);
         assertThat(response.readAt()).isEqualTo(readAt);
+    }
+
+    @Test
+    void create_securityNotification_isSentImmediately() {
+        when(notificationRepository.save(any(Notification.class))).thenAnswer(invocation -> {
+            Notification saved = invocation.getArgument(0);
+            saved.setId(notificationId);
+            return saved;
+        });
+
+        NotificationResponse response = notificationService.create(
+                userId,
+                new CreateNotificationRequest(
+                        NotificationType.SECURITY,
+                        "Connexion depuis un nouvel appareil",
+                        "Firefox sur Windows",
+                        ReminderSourceType.CUSTOM));
+
+        assertThat(response.notificationType()).isEqualTo(NotificationType.SECURITY);
+        assertThat(response.status()).isEqualTo(NotificationStatus.SENT);
+        assertThat(response.title()).isEqualTo("Connexion depuis un nouvel appareil");
+    }
+
+    @Test
+    void bootstrap_skipsTitlesThatAlreadyExist() {
+        when(notificationRepository.existsByUserIdAndTitleAndDeletedFalse(any(), any()))
+                .thenReturn(true);
+
+        BootstrapNotificationsResponse response = notificationService.bootstrap(userId);
+
+        assertThat(response.created()).isEqualTo(0);
     }
 
     private Notification unread() {

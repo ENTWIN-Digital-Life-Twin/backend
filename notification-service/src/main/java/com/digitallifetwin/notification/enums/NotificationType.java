@@ -4,5 +4,6 @@ public enum NotificationType {
     REMINDER,
     WARNING,
     INFO,
-    SYSTEM
+    SYSTEM,
+    SECURITY
 }

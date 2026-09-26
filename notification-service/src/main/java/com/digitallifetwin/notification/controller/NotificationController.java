@@ -1,5 +1,7 @@
 package com.digitallifetwin.notification.controller;
 
+import com.digitallifetwin.notification.dto.request.CreateNotificationRequest;
+import com.digitallifetwin.notification.dto.response.BootstrapNotificationsResponse;
 import com.digitallifetwin.notification.dto.response.ErrorResponse;
 import com.digitallifetwin.notification.dto.response.NotificationResponse;
 import com.digitallifetwin.notification.dto.response.PageResponse;
@@ -16,15 +18,19 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -80,6 +86,19 @@ public class NotificationController {
     @Operation(summary = "Mark all unread notifications as read")
     public ResponseEntity<UnreadCountResponse> readAll() {
         return ResponseEntity.ok(notificationService.markAllRead(SecurityUtils.currentUserId()));
+    }
+
+    @PostMapping("/bootstrap")
+    @Operation(summary = "Create starter reminder, wellness and system notifications if missing")
+    public ResponseEntity<BootstrapNotificationsResponse> bootstrap() {
+        return ResponseEntity.ok(notificationService.bootstrap(SecurityUtils.currentUserId()));
+    }
+
+    @PostMapping
+    @Operation(summary = "Create an in-app notification for the authenticated user")
+    public ResponseEntity<NotificationResponse> create(@Valid @RequestBody CreateNotificationRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(notificationService.create(SecurityUtils.currentUserId(), request));
     }
 
     @GetMapping("/{id}")

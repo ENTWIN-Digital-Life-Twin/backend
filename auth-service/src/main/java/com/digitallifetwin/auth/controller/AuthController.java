@@ -17,6 +17,7 @@ import com.digitallifetwin.auth.dto.response.UserResponse;
 import com.digitallifetwin.auth.security.SecurityUtils;
 import com.digitallifetwin.auth.service.AuthService;
 import com.digitallifetwin.auth.service.ContactService;
+import com.digitallifetwin.auth.service.DeviceService;
 import com.digitallifetwin.auth.service.EmailVerificationService;
 import com.digitallifetwin.auth.service.PasswordResetService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,13 +25,16 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -41,6 +45,7 @@ public class AuthController {
     private final PasswordResetService passwordResetService;
     private final ContactService contactService;
     private final EmailVerificationService emailVerificationService;
+    private final DeviceService deviceService;
 
     @PostMapping("/register/send-code")
     @SecurityRequirements
@@ -60,15 +65,21 @@ public class AuthController {
     @PostMapping("/login")
     @SecurityRequirements
     @Operation(summary = "Authenticate and receive access and refresh tokens")
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ResponseEntity.ok(authService.login(request));
+    public ResponseEntity<AuthResponse> login(
+            @Valid @RequestBody LoginRequest request,
+            @RequestHeader(value = "X-Device-Id", required = false) String deviceId,
+            @RequestHeader(value = "X-Device-Label", required = false) String deviceLabel) {
+        return ResponseEntity.ok(withDeviceFlag(authService.login(request), deviceId, deviceLabel));
     }
 
     @PostMapping("/google")
     @SecurityRequirements
     @Operation(summary = "Authenticate with a verified Google ID token")
-    public ResponseEntity<AuthResponse> google(@Valid @RequestBody GoogleLoginRequest request) {
-        return ResponseEntity.ok(authService.loginWithGoogle(request));
+    public ResponseEntity<AuthResponse> google(
+            @Valid @RequestBody GoogleLoginRequest request,
+            @RequestHeader(value = "X-Device-Id", required = false) String deviceId,
+            @RequestHeader(value = "X-Device-Label", required = false) String deviceLabel) {
+        return ResponseEntity.ok(withDeviceFlag(authService.loginWithGoogle(request), deviceId, deviceLabel));
     }
 
     @PostMapping("/refresh")
@@ -104,5 +115,15 @@ public class AuthController {
     @Operation(summary = "Submit a public contact message")
     public ResponseEntity<MessageResponse> contact(@Valid @RequestBody ContactRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(contactService.submit(request));
+    }
+
+    private AuthResponse withDeviceFlag(AuthResponse tokens, String deviceId, String deviceLabel) {
+        try {
+            boolean newDevice = deviceService.remember(tokens.user().id(), deviceId, deviceLabel);
+            return tokens.withNewDevice(newDevice);
+        } catch (RuntimeException ex) {
+            log.warn("Could not record login device for user {}", tokens.user().id());
+            return tokens;
+        }
     }
 }
