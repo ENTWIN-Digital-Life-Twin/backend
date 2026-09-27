@@ -74,6 +74,16 @@ class AdminControllerTest {
         verify(contactService).delete(contactId);
     }
 
+    @Test
+    void deleteUser_returnsNoContent() {
+        UUID userId = UUID.randomUUID();
+
+        ResponseEntity<Void> response = controller.deleteUser(userId);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        verify(adminUserService).delete(adminId, userId);
+    }
+
     private static UserProfileResponse profile(UUID userId) {
         return new UserProfileResponse(
                 userId,

@@ -88,6 +88,19 @@ public class AdminUserService {
         return userMapper.toProfileResponse(user);
     }
 
+    @Transactional
+    public void delete(UUID adminId, UUID userId) {
+        if (adminId.equals(userId)) {
+            throw new AccessDeniedException("Cannot delete your own account");
+        }
+        User user = userRepository.findByIdWithRoles(userId).orElseThrow(UserNotFoundException::new);
+        if (hasRole(user, RoleName.ADMIN) && userRepository.countByRoleName(RoleName.ADMIN) <= 1) {
+            throw new AccessDeniedException("Cannot remove the last administrator");
+        }
+        refreshTokenService.revokeAllForUser(user);
+        userRepository.delete(user);
+    }
+
     private Role requireRole(RoleName name) {
         return roleRepository.findByName(name)
                 .orElseThrow(() -> new IllegalStateException("Required role is missing: " + name));

@@ -66,6 +66,13 @@ public class AdminController {
         return ResponseEntity.ok(adminUserService.updateRole(SecurityUtils.currentUserId(), id, request));
     }
 
+    @DeleteMapping("/users/{id}")
+    @Operation(summary = "Delete a user account")
+    public ResponseEntity<Void> deleteUser(@PathVariable UUID id) {
+        adminUserService.delete(SecurityUtils.currentUserId(), id);
+        return ResponseEntity.noContent().build();
+    }
+
     @DeleteMapping("/contacts/{id}")
     @Operation(summary = "Delete a contact message")
     public ResponseEntity<Void> deleteContact(@PathVariable UUID id) {

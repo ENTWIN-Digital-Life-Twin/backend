@@ -146,4 +146,20 @@ class AdminUserServiceTest {
 
         assertThat(response.roles()).containsExactly("USER");
     }
+
+    @Test
+    void delete_rejectsSelf() {
+        assertThatThrownBy(() -> adminUserService.delete(adminId, adminId))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void delete_revokesTokensAndRemovesUser() {
+        when(userRepository.findByIdWithRoles(userId)).thenReturn(Optional.of(user));
+
+        adminUserService.delete(adminId, userId);
+
+        verify(refreshTokenService).revokeAllForUser(user);
+        verify(userRepository).delete(user);
+    }
 }
