@@ -5,6 +5,10 @@ spring:
     gateway:
       server:
         webflux:
+          # Downstream services also emit CORS headers; browsers reject duplicated values.
+          default-filters:
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Access-Control-Expose-Headers, RETAIN_FIRST
+            - DedupeResponseHeader=Vary, RETAIN_UNIQUE
           # Path-preserving routes — frontend keeps existing /api/... paths.
           routes:
             - id: auth-service

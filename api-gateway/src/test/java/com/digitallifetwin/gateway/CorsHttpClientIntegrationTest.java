@@ -8,6 +8,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.List;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import org.junit.jupiter.api.AfterAll;
@@ -87,6 +88,32 @@ class CorsHttpClientIntegrationTest {
         assertEquals(200, loginResponse.statusCode());
         assertEquals("http://localhost:4200",
                 loginResponse.headers().firstValue("Access-Control-Allow-Origin").orElse(null));
+    }
+
+    @Test
+    void downstreamCorsHeadersAreNotDuplicated() throws Exception {
+        HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+
+        authServer.enqueue(new MockResponse()
+                .setResponseCode(200)
+                .setHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .setHeader("Access-Control-Allow-Origin", "http://localhost:4200")
+                .setHeader("Access-Control-Allow-Credentials", "true")
+                .setHeader("Access-Control-Expose-Headers", "Authorization")
+                .setBody("{}"));
+
+        HttpRequest login = HttpRequest.newBuilder()
+                .uri(URI.create("http://127.0.0.1:" + port + "/api/auth/login"))
+                .header("Origin", "http://localhost:4200")
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{}"))
+                .build();
+
+        HttpResponse<String> response = client.send(login, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode());
+        assertEquals(List.of("http://localhost:4200"), response.headers().allValues("Access-Control-Allow-Origin"));
+        assertEquals(List.of("true"), response.headers().allValues("Access-Control-Allow-Credentials"));
+        assertEquals(1, response.headers().allValues("Access-Control-Expose-Headers").size());
     }
 
     @Test
